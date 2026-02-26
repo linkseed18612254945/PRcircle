@@ -17,6 +17,7 @@ function cfg(prefix) {
     api_key: document.getElementById(`${prefix}_key`).value,
     temperature: Number(document.getElementById(`${prefix}_temp`).value),
     max_tokens: Number(document.getElementById(`${prefix}_max`).value),
+    system_prompt: document.getElementById(`${prefix}_prompt`).value,
   };
 }
 

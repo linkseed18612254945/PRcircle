@@ -14,6 +14,10 @@ class LLMConfig(BaseModel):
     max_tokens: int = 800
 
 
+class AgentConfig(LLMConfig):
+    system_prompt: str
+
+
 class RetrievalResult(BaseModel):
     id: str
     title: str
@@ -47,8 +51,8 @@ class DialogueState(BaseModel):
 class RunRequest(BaseModel):
     topic: str
     max_rounds: int = 4
-    agentA_config: LLMConfig
-    agentB_config: LLMConfig
+    agentA_config: AgentConfig
+    agentB_config: AgentConfig
     tavily_api_key: str
     search_topk: int = 5
 

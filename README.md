@@ -46,7 +46,7 @@ Backend Service (FastAPI)
 - **检索增强**：通过 Tavily 引入外部信息与反例线索。
 - **容错策略**：Tavily 失败时返回空结果，不中断主流程。
 - **OpenAI-compatible**：可对接兼容 `/chat/completions` 的任意模型网关。
-- **轻量前端**：开箱可用，支持话题输入与模型参数配置。
+- **轻量前端**：开箱可用，支持话题输入、模型参数与 Agent Prompt 配置。
 
 ---
 
@@ -61,6 +61,7 @@ Backend Service (FastAPI)
 │   ├── llm_client.py      # OpenAI-compatible LLM 调用
 │   ├── main.py            # FastAPI 入口 + /api/run
 │   ├── models.py          # Pydantic 数据模型
+│   ├── prompts.py         # Agent 默认 System Prompt 配置
 │   └── search_tool.py     # Tavily 检索适配
 ├── static/
 │   ├── index.html         # Chat + Settings 页面
@@ -215,14 +216,16 @@ call_llm(messages, config) -> str
     "base_url": "https://api.openai.com/v1",
     "api_key": "<YOUR_KEY>",
     "temperature": 0.7,
-    "max_tokens": 800
+    "max_tokens": 800,
+    "system_prompt": "你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。"
   },
   "agentB_config": {
     "model_name": "gpt-4o-mini",
     "base_url": "https://api.openai.com/v1",
     "api_key": "<YOUR_KEY>",
     "temperature": 0.7,
-    "max_tokens": 800
+    "max_tokens": 800,
+    "system_prompt": "你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。"
   },
   "tavily_api_key": "<TAVILY_KEY>",
   "search_topk": 5
@@ -269,8 +272,8 @@ call_llm(messages, config) -> str
    - 展示完整消息流、structured JSON 与检索来源
 
 2. **Settings**
-   - Agent A 模型配置
-   - Agent B 模型配置
+   - Agent A 模型配置 + System Prompt
+   - Agent B 模型配置 + System Prompt
    - Tavily API Key 与默认 topk
 
 ---
@@ -313,14 +316,16 @@ curl -X POST 'http://127.0.0.1:8000/api/run' \
       "base_url": "https://api.openai.com/v1",
       "api_key": "YOUR_OPENAI_KEY",
       "temperature": 0.7,
-      "max_tokens": 600
+      "max_tokens": 600,
+      "system_prompt": "你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。"
     },
     "agentB_config": {
       "model_name": "gpt-4o-mini",
       "base_url": "https://api.openai.com/v1",
       "api_key": "YOUR_OPENAI_KEY",
       "temperature": 0.7,
-      "max_tokens": 600
+      "max_tokens": 600,
+      "system_prompt": "你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。"
     },
     "tavily_api_key": "YOUR_TAVILY_KEY",
     "search_topk": 5

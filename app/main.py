@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from .agents import AnalysisAgent, ChallengeAgent
 from .dialogue_engine import DialogueEngine
 from .models import RunRequest, RunResponse
+from .prompts import DEFAULT_ANALYSIS_SYSTEM_PROMPT, DEFAULT_CHALLENGE_SYSTEM_PROMPT
 from .search_tool import TavilySearchTool
 
 app = FastAPI(title="Multi-Agent Analysis MVP")
@@ -30,7 +31,7 @@ async def run_dialogue(req: RunRequest) -> RunResponse:
         agent_id="A",
         role="analysis",
         llm_config=req.agentA_config,
-        system_prompt="你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。",
+        system_prompt=req.agentA_config.system_prompt or DEFAULT_ANALYSIS_SYSTEM_PROMPT,
         search_tool=search_tool,
         search_topk=req.search_topk,
     )
@@ -38,7 +39,7 @@ async def run_dialogue(req: RunRequest) -> RunResponse:
         agent_id="B",
         role="challenge",
         llm_config=req.agentB_config,
-        system_prompt="你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。",
+        system_prompt=req.agentB_config.system_prompt or DEFAULT_CHALLENGE_SYSTEM_PROMPT,
         search_tool=search_tool,
         search_topk=req.search_topk,
     )

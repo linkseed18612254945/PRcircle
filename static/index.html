@@ -48,11 +48,13 @@
         <h3>Agent A 配置</h3>
         <div class="row"><input id="a_model" placeholder="model_name" value="gpt-4o-mini" /><input id="a_base" placeholder="base_url" value="https://api.openai.com/v1" /></div>
         <div class="row"><input id="a_key" placeholder="api_key" /><input id="a_temp" value="0.7" /><input id="a_max" value="800" /></div>
+        <div class="row"><textarea id="a_prompt" placeholder="Agent A system prompt" style="width:100%;min-height:90px;">你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。</textarea></div>
       </div>
       <div class="card">
         <h3>Agent B 配置</h3>
         <div class="row"><input id="b_model" placeholder="model_name" value="gpt-4o-mini" /><input id="b_base" placeholder="base_url" value="https://api.openai.com/v1" /></div>
         <div class="row"><input id="b_key" placeholder="api_key" /><input id="b_temp" value="0.7" /><input id="b_max" value="800" /></div>
+        <div class="row"><textarea id="b_prompt" placeholder="Agent B system prompt" style="width:100%;min-height:90px;">你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。</textarea></div>
       </div>
       <div class="card">
         <h3>Tavily 配置</h3>
