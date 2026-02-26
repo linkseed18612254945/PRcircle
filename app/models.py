@@ -31,6 +31,7 @@ class AgentMessage(BaseModel):
     content: str
     structured: dict[str, Any] = Field(default_factory=dict)
     retrievals: list[RetrievalResult] = Field(default_factory=list)
+    search_queries: list[str] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -47,6 +48,18 @@ class DialogueState(BaseModel):
     turn_index: int = 0
     max_rounds: int = 4
     messages: list[dict[str, Any]] = Field(default_factory=list)
+    intel_pool: list[RetrievalResult] = Field(default_factory=list)
+    intel_ids: set[str] = Field(default_factory=set)
+
+    def add_intel(self, retrievals: list[RetrievalResult]) -> list[RetrievalResult]:
+        newly_added: list[RetrievalResult] = []
+        for item in retrievals:
+            if item.id in self.intel_ids:
+                continue
+            self.intel_ids.add(item.id)
+            self.intel_pool.append(item)
+            newly_added.append(item)
+        return newly_added
 
 
 class RunRequest(BaseModel):

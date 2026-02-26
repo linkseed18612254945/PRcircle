@@ -69,6 +69,13 @@ function renderMessages(messages) {
       card.appendChild(d);
     }
 
+
+    if (m.search_queries?.length) {
+      const q = document.createElement('div');
+      q.className = 'retrieval';
+      q.innerHTML = '<strong>检索词</strong><br/>' + m.search_queries.map(x => `• ${x}`).join('<br/>');
+      card.appendChild(q);
+    }
     if (m.retrievals?.length) {
       const list = document.createElement('div');
       list.className = 'retrieval';
