@@ -36,11 +36,14 @@ class BaseAgent(ABC):
     async def call_llm(self, messages: list[dict[str, str]]) -> str:
         return await call_llm(messages=messages, config=self.llm_config)
 
-    def _safe_json(self, text: str) -> dict[str, Any]:
+    def _try_extract_json(self, text: str) -> dict[str, Any]:
+        text = text.strip()
+        if not text:
+            return {}
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            return {"raw": text}
+            return {}
 
 
 class AnalysisAgent(BaseAgent):
@@ -55,16 +58,12 @@ class AnalysisAgent(BaseAgent):
             [f"- {r.title} ({r.url}): {r.content[:200]}" for r in retrievals[:3]]
         )
 
-        constraints = (
-            "必须输出 JSON，格式为 {summary, candidates[]}。"
-            "首轮至少给 2 个不同机制候选方案。"
-            f"必须执行 mutations: {required_mutations or ['None']}。"
-        )
         user_prompt = (
             f"话题: {state.topic}\n"
             f"当前轮次: {state.turn_index}\n"
+            f"上一轮要求变异: {required_mutations or ['无']}\n"
             f"检索摘要:\n{retrieval_digest or '无'}\n"
-            f"规则: {constraints}"
+            "请给出清晰分析，可使用自然语言或 JSON 结构。"
         )
         response = await self.call_llm(
             [
@@ -72,19 +71,12 @@ class AnalysisAgent(BaseAgent):
                 {"role": "user", "content": user_prompt},
             ]
         )
-        structured = self._safe_json(response)
-        if state.turn_index == 0 and len(structured.get("candidates", [])) < 2:
-            structured.setdefault("candidates", [])
-            structured["candidates"].append(
-                {
-                    "name": "Fallback Candidate",
-                    "core_mechanism": "Heuristic synthesis",
-                    "assumptions": ["Need at least two candidates in round 1"],
-                    "steps": ["Generate an alternative mechanism", "Compare trade-offs"],
-                    "verification": "A/B evaluation against baseline",
-                }
-            )
-        return AgentMessage(role="A", content=response, structured=structured, retrievals=retrievals)
+        return AgentMessage(
+            role="A",
+            content=response,
+            structured=self._try_extract_json(response),
+            retrievals=retrievals,
+        )
 
 
 class ChallengeAgent(BaseAgent):
@@ -94,12 +86,13 @@ class ChallengeAgent(BaseAgent):
         retrieval_digest = "\n".join(
             [f"- {r.title} ({r.url}): {r.content[:200]}" for r in retrievals[:3]]
         )
+
+        a_reference = last_a.get("content", "") if last_a else ""
         user_prompt = (
             f"话题: {state.topic}\n"
-            f"分析者最新输出: {json.dumps(last_a.get('structured', {}) if last_a else {}, ensure_ascii=False)}\n"
+            f"分析者最新输出:\n{a_reference}\n"
             f"检索反例:\n{retrieval_digest or '无'}\n"
-            "必须输出 JSON，格式为 {criticisms, required_mutations, test_cases, questions}。"
-            "至少 2 个批评，至少 1 个 mutation，至少 1 个 test case。"
+            "请提出关键批评、必须修正项、测试建议与追问。可使用自然语言或 JSON。"
         )
         response = await self.call_llm(
             [
@@ -107,15 +100,9 @@ class ChallengeAgent(BaseAgent):
                 {"role": "user", "content": user_prompt},
             ]
         )
-        structured = self._safe_json(response)
-        structured.setdefault("criticisms", ["Need stronger evidence", "Assumptions may be fragile"])
-        if len(structured["criticisms"]) < 2:
-            structured["criticisms"].append("Please add robustness analysis")
-        structured.setdefault("required_mutations", ["ConstraintFlip"])
-        if len(structured["required_mutations"]) < 1:
-            structured["required_mutations"] = ["AnalogyJump"]
-        structured.setdefault("test_cases", ["Edge-case scenario validation"])
-        if len(structured["test_cases"]) < 1:
-            structured["test_cases"] = ["Out-of-distribution stress test"]
-        structured.setdefault("questions", ["How would this fail under extreme constraints?"])
-        return AgentMessage(role="B", content=response, structured=structured, retrievals=retrievals)
+        return AgentMessage(
+            role="B",
+            content=response,
+            structured=self._try_extract_json(response),
+            retrievals=retrievals,
+        )

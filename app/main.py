@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .agents import AnalysisAgent, ChallengeAgent
@@ -24,8 +25,7 @@ app.add_middleware(
 )
 
 
-@app.post("/api/run", response_model=RunResponse)
-async def run_dialogue(req: RunRequest) -> RunResponse:
+def build_engine(req: RunRequest) -> DialogueEngine:
     search_tool = TavilySearchTool(api_key=req.tavily_api_key)
     agent_a = AnalysisAgent(
         agent_id="A",
@@ -43,10 +43,26 @@ async def run_dialogue(req: RunRequest) -> RunResponse:
         search_tool=search_tool,
         search_topk=req.search_topk,
     )
+    return DialogueEngine(analysis_agent=agent_a, challenge_agent=agent_b)
 
-    engine = DialogueEngine(analysis_agent=agent_a, challenge_agent=agent_b)
-    state = await engine.run(topic=req.topic, max_rounds=req.max_rounds)
-    return RunResponse(messages=state.messages)
+
+@app.post("/api/run", response_model=RunResponse)
+async def run_dialogue(req: RunRequest) -> RunResponse:
+    engine = build_engine(req)
+    state = await engine.run(topic=req.topic, max_rounds=req.max_rounds, session_id=req.session_id)
+    return RunResponse(session_id=state.session_id, messages=state.messages)
+
+
+@app.post("/api/run/stream")
+async def run_dialogue_stream(req: RunRequest) -> StreamingResponse:
+    engine = build_engine(req)
+    state = engine.create_state(topic=req.topic, max_rounds=req.max_rounds, session_id=req.session_id)
+
+    async def event_gen():
+        async for event in engine.run_stream(state):
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_gen(), media_type="text/event-stream")
 
 
 static_dir = Path(__file__).resolve().parent.parent / "static"

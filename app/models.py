@@ -42,6 +42,7 @@ class UserMessage(BaseModel):
 
 
 class DialogueState(BaseModel):
+    session_id: str
     topic: str
     turn_index: int = 0
     max_rounds: int = 4
@@ -50,6 +51,7 @@ class DialogueState(BaseModel):
 
 class RunRequest(BaseModel):
     topic: str
+    session_id: str | None = None
     max_rounds: int = 4
     agentA_config: AgentConfig
     agentB_config: AgentConfig
@@ -58,4 +60,5 @@ class RunRequest(BaseModel):
 
 
 class RunResponse(BaseModel):
+    session_id: str
     messages: list[dict[str, Any]]

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import uuid
+from collections.abc import AsyncGenerator
+
 from .agents import AnalysisAgent, ChallengeAgent
 from .models import DialogueState, UserMessage
 
@@ -9,20 +12,40 @@ class DialogueEngine:
         self.analysis_agent = analysis_agent
         self.challenge_agent = challenge_agent
 
-    async def run(self, topic: str, max_rounds: int) -> DialogueState:
-        state = DialogueState(topic=topic, max_rounds=max_rounds)
+    def create_state(self, topic: str, max_rounds: int, session_id: str | None = None) -> DialogueState:
+        sid = session_id or str(uuid.uuid4())
+        state = DialogueState(session_id=sid, topic=topic, max_rounds=max_rounds)
         state.messages.append(UserMessage(content=topic).model_dump())
+        return state
 
-        for round_idx in range(max_rounds):
+    async def run(self, topic: str, max_rounds: int, session_id: str | None = None) -> DialogueState:
+        state = self.create_state(topic=topic, max_rounds=max_rounds, session_id=session_id)
+        async for _ in self.run_stream(state):
+            pass
+        return state
+
+    async def run_stream(self, state: DialogueState) -> AsyncGenerator[dict, None]:
+        yield {"type": "session_started", "session_id": state.session_id, "message": state.messages[0]}
+
+        for round_idx in range(state.max_rounds):
             state.turn_index = round_idx
 
             a_msg = await self.analysis_agent.generate(state)
-            state.messages.append(a_msg.model_dump())
+            a_dump = a_msg.model_dump()
+            state.messages.append(a_dump)
+            yield {"type": "message", "session_id": state.session_id, "message": a_dump}
 
             b_msg = await self.challenge_agent.generate(state)
-            state.messages.append(b_msg.model_dump())
+            b_dump = b_msg.model_dump()
+            state.messages.append(b_dump)
+            yield {"type": "message", "session_id": state.session_id, "message": b_dump}
 
             if b_msg.structured.get("stop") is True:
+                yield {"type": "stopped", "session_id": state.session_id, "reason": "agent_b_stop"}
                 break
 
-        return state
+        yield {
+            "type": "done",
+            "session_id": state.session_id,
+            "messages": state.messages,
+        }

@@ -17,7 +17,7 @@
 1. A 给出结构化分析方案
 2. B 基于 A 的输出进行批评和挑战，提出 required mutations 与 test cases
 3. 下一轮 A 按 B 的要求继续修正与拓展
-4. 最终返回完整对话过程（含结构化 JSON 与检索来源）
+4. 最终返回完整对话过程（含消息内容、可选结构化字段与检索来源）
 
 ---
 
@@ -42,7 +42,7 @@ Backend Service (FastAPI)
 ## 3. 功能特性
 
 - **双 Agent 协同推理**：分析 + 质询，提升方案严谨性。
-- **结构化输出**：A/B 都要求输出 JSON，方便前端解析与后续扩展。
+- **灵活输出**：A/B 可输出自然语言或 JSON；若响应可解析为 JSON，会在 `structured` 字段中展示。
 - **检索增强**：通过 Tavily 引入外部信息与反例线索。
 - **容错策略**：Tavily 失败时返回空结果，不中断主流程。
 - **OpenAI-compatible**：可对接兼容 `/chat/completions` 的任意模型网关。
@@ -59,7 +59,7 @@ Backend Service (FastAPI)
 │   ├── agents.py          # BaseAgent / AnalysisAgent / ChallengeAgent
 │   ├── dialogue_engine.py # 多轮对话编排
 │   ├── llm_client.py      # OpenAI-compatible LLM 调用
-│   ├── main.py            # FastAPI 入口 + /api/run
+│   ├── main.py            # FastAPI 入口 + /api/run + /api/run/stream
 │   ├── models.py          # Pydantic 数据模型
 │   ├── prompts.py         # Agent 默认 System Prompt 配置
 │   └── search_tool.py     # Tavily 检索适配
@@ -205,6 +205,12 @@ call_llm(messages, config) -> str
 
 ### `POST /api/run`
 
+用于非流式一次性返回结果。
+
+### `POST /api/run/stream`
+
+用于流式返回（SSE）。每条事件以 `data: {...}` 下发，`type` 包含 `session_started` / `message` / `done`。
+
 请求体示例：
 
 ```json
@@ -217,7 +223,7 @@ call_llm(messages, config) -> str
     "api_key": "<YOUR_KEY>",
     "temperature": 0.7,
     "max_tokens": 800,
-    "system_prompt": "你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。"
+    "system_prompt": "你是分析者（Agent A）。请给出有条理分析，可自然语言输出。"
   },
   "agentB_config": {
     "model_name": "gpt-4o-mini",
@@ -225,7 +231,7 @@ call_llm(messages, config) -> str
     "api_key": "<YOUR_KEY>",
     "temperature": 0.7,
     "max_tokens": 800,
-    "system_prompt": "你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。"
+    "system_prompt": "你是质询者（Agent B）。请给出关键批评与测试建议，可自然语言输出。"
   },
   "tavily_api_key": "<TAVILY_KEY>",
   "search_topk": 5
@@ -244,14 +250,14 @@ call_llm(messages, config) -> str
     {
       "role": "A",
       "content": "{...}",
-      "structured": {"summary": "...", "candidates": [...]},
+      "structured": {"...": "仅当模型输出可解析 JSON 时出现"},
       "retrievals": [...],
       "timestamp": "..."
     },
     {
       "role": "B",
       "content": "{...}",
-      "structured": {"criticisms": [...], "required_mutations": [...]},
+      "structured": {"...": "仅当模型输出可解析 JSON 时出现"},
       "retrievals": [...],
       "timestamp": "..."
     }
@@ -269,12 +275,16 @@ call_llm(messages, config) -> str
    - 输入 Topic
    - 设置 `max_rounds`
    - 点击 Start 发起分析
-   - 展示完整消息流、structured JSON 与检索来源
+   - 流式展示消息，支持查看 structured（若存在）与检索来源
 
 2. **Settings**
    - Agent A 模型配置 + System Prompt
    - Agent B 模型配置 + System Prompt
    - Tavily API Key 与默认 topk
+
+3. **多会话能力**
+   - 支持创建多个分析会话并切换查看历史
+   - 单会话运行中会锁定提交按钮，避免重复触发
 
 ---
 
@@ -306,7 +316,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ## 9. 快速调试（cURL）
 
 ```bash
-curl -X POST 'http://127.0.0.1:8000/api/run' \
+curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
   -H 'Content-Type: application/json' \
   -d '{
     "topic": "如何设计低成本在线实验验证商业假设",
@@ -317,7 +327,7 @@ curl -X POST 'http://127.0.0.1:8000/api/run' \
       "api_key": "YOUR_OPENAI_KEY",
       "temperature": 0.7,
       "max_tokens": 600,
-      "system_prompt": "你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。"
+      "system_prompt": "你是分析者（Agent A）。请给出有条理分析，可自然语言输出。"
     },
     "agentB_config": {
       "model_name": "gpt-4o-mini",
@@ -325,7 +335,7 @@ curl -X POST 'http://127.0.0.1:8000/api/run' \
       "api_key": "YOUR_OPENAI_KEY",
       "temperature": 0.7,
       "max_tokens": 600,
-      "system_prompt": "你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。"
+      "system_prompt": "你是质询者（Agent B）。请给出关键批评与测试建议，可自然语言输出。"
     },
     "tavily_api_key": "YOUR_TAVILY_KEY",
     "search_topk": 5
@@ -337,7 +347,7 @@ curl -X POST 'http://127.0.0.1:8000/api/run' \
 ## 10. 异常与容错说明
 
 - **Tavily 请求失败**：捕获异常并返回 `[]`，不会中断 A/B 推理流程。
-- **模型输出非 JSON**：系统会保留 `raw` 字段作为回退，避免流程崩溃。
+- **模型输出非 JSON**：这是默认支持路径；仅在可解析 JSON 时填充 `structured`。
 - **结构约束不足**：对 A/B 的关键字段存在兜底逻辑（例如最少批评条数）。
 
 ---
@@ -350,7 +360,7 @@ curl -X POST 'http://127.0.0.1:8000/api/run' \
 - 增加鉴权/限流/审计日志
 - 增加请求超时与重试策略配置
 - 增加提示词注入防护与输出 schema 强校验
-- 对消息持久化与会话隔离进行增强
+- 对后端消息持久化与会话隔离进行增强
 
 ---
 
@@ -365,7 +375,7 @@ curl -X POST 'http://127.0.0.1:8000/api/run' \
 
 ## 13. 后续可扩展方向
 
-- 引入 streaming API（SSE/WebSocket）实时展示 A/B 对话
+- 进一步增强 streaming 体验（token 级别推送 / 断线续传）
 - 增加 Stop 策略（基于收敛度或置信评分）
 - 引入更多角色（例如 JudgeAgent）
 - 对 structured 输出做 JSON Schema 强校验

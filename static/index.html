@@ -13,14 +13,16 @@
       .page.active { display: block; }
       .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
       .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
-      input, textarea { padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 180px; }
+      input, textarea, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; min-width: 180px; }
       button { padding: 10px 16px; border: none; background: #2563eb; color: #fff; border-radius: 6px; cursor: pointer; }
+      button:disabled { background: #9ca3af; cursor: not-allowed; }
       .msg { padding: 12px; border-radius: 8px; margin: 8px 0; }
       .A { background: #dbeafe; }
       .B { background: #fee2e2; }
       .user { background: #e5e7eb; }
       details { margin-top: 6px; }
       .retrieval { font-size: 12px; color: #374151; }
+      .muted { color: #6b7280; font-size: 13px; }
     </style>
   </head>
   <body>
@@ -32,10 +34,15 @@
     <div id="chatPage" class="page active">
       <div class="card">
         <div class="row">
+          <select id="sessionSelect" style="min-width:260px"></select>
+          <button id="newSessionBtn" type="button">New Session</button>
+        </div>
+        <div class="row">
           <input id="topic" placeholder="输入分析话题" style="flex: 1;" />
           <input id="maxRounds" type="number" value="3" min="1" max="8" />
-          <button id="startBtn">Start</button>
+          <button id="startBtn" type="button">Start</button>
         </div>
+        <div id="runStatus" class="muted">未运行</div>
       </div>
       <div class="card">
         <h3>对话过程</h3>
@@ -48,13 +55,13 @@
         <h3>Agent A 配置</h3>
         <div class="row"><input id="a_model" placeholder="model_name" value="gpt-4o-mini" /><input id="a_base" placeholder="base_url" value="https://api.openai.com/v1" /></div>
         <div class="row"><input id="a_key" placeholder="api_key" /><input id="a_temp" value="0.7" /><input id="a_max" value="800" /></div>
-        <div class="row"><textarea id="a_prompt" placeholder="Agent A system prompt" style="width:100%;min-height:90px;">你是分析者（Agent A）。请给出结构化分析方案，并严格输出 JSON。</textarea></div>
+        <div class="row"><textarea id="a_prompt" placeholder="Agent A system prompt" style="width:100%;min-height:90px;">你是分析者（Agent A）。请给出有条理的分析，可输出自然语言，不强制 JSON。</textarea></div>
       </div>
       <div class="card">
         <h3>Agent B 配置</h3>
         <div class="row"><input id="b_model" placeholder="model_name" value="gpt-4o-mini" /><input id="b_base" placeholder="base_url" value="https://api.openai.com/v1" /></div>
         <div class="row"><input id="b_key" placeholder="api_key" /><input id="b_temp" value="0.7" /><input id="b_max" value="800" /></div>
-        <div class="row"><textarea id="b_prompt" placeholder="Agent B system prompt" style="width:100%;min-height:90px;">你是质询者（Agent B）。请输出批评、突变要求、测试案例，并严格输出 JSON。</textarea></div>
+        <div class="row"><textarea id="b_prompt" placeholder="Agent B system prompt" style="width:100%;min-height:90px;">你是质询者（Agent B）。请给出关键质疑、修正建议和测试点，可输出自然语言，不强制 JSON。</textarea></div>
       </div>
       <div class="card">
         <h3>Tavily 配置</h3>
