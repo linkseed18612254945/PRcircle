@@ -55,6 +55,76 @@ function cfg(prefix) {
   };
 }
 
+function escapeHtml(text) {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function inlineMarkdown(text) {
+  return text
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+}
+
+function markdownToHtml(rawText) {
+  const safe = escapeHtml(String(rawText || '')).replaceAll('\r\n', '\n');
+  const lines = safe.split('\n');
+  let html = '';
+  let inList = false;
+
+  const closeList = () => {
+    if (inList) {
+      html += '</ul>';
+      inList = false;
+    }
+  };
+
+  lines.forEach((line) => {
+    if (!line.trim()) {
+      closeList();
+      html += '<br/>';
+      return;
+    }
+
+    if (line.startsWith('### ')) {
+      closeList();
+      html += `<h4>${inlineMarkdown(line.slice(4))}</h4>`;
+      return;
+    }
+    if (line.startsWith('## ')) {
+      closeList();
+      html += `<h3>${inlineMarkdown(line.slice(3))}</h3>`;
+      return;
+    }
+    if (line.startsWith('# ')) {
+      closeList();
+      html += `<h2>${inlineMarkdown(line.slice(2))}</h2>`;
+      return;
+    }
+
+    if (/^[-*]\s+/.test(line)) {
+      if (!inList) {
+        html += '<ul>';
+        inList = true;
+      }
+      html += `<li>${inlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`;
+      return;
+    }
+
+    closeList();
+    html += `<p>${inlineMarkdown(line)}</p>`;
+  });
+
+  closeList();
+  return html;
+}
+
 function renderMessages(messages) {
   const el = document.getElementById('messages');
   el.innerHTML = '';
@@ -62,7 +132,7 @@ function renderMessages(messages) {
     const card = document.createElement('div');
     card.className = `msg ${m.role}`;
     const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    card.innerHTML = `<strong>${m.role}</strong><div>${content.replaceAll('\n', '<br/>')}</div>`;
+    card.innerHTML = `<strong>${m.role}</strong><div class="markdown-body">${markdownToHtml(content)}</div>`;
 
     if (m.structured && Object.keys(m.structured).length > 0) {
       const d = document.createElement('details');
