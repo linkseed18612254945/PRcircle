@@ -3,14 +3,15 @@ from __future__ import annotations
 import uuid
 from collections.abc import AsyncGenerator
 
-from .agents import AnalysisAgent, ChallengeAgent
+from .agents import AnalysisAgent, ChallengeAgent, ObserverAgent
 from .models import DialogueState, UserMessage
 
 
 class DialogueEngine:
-    def __init__(self, analysis_agent: AnalysisAgent, challenge_agent: ChallengeAgent):
+    def __init__(self, analysis_agent: AnalysisAgent, challenge_agent: ChallengeAgent, observer_agent: ObserverAgent):
         self.analysis_agent = analysis_agent
         self.challenge_agent = challenge_agent
+        self.observer_agent = observer_agent
 
     def create_state(
         self,
@@ -74,6 +75,11 @@ class DialogueEngine:
             if b_msg.structured.get("stop") is True:
                 yield {"type": "stopped", "session_id": state.session_id, "reason": "agent_b_stop"}
                 break
+
+        c_msg = await self.observer_agent.generate(state)
+        c_dump = c_msg.model_dump()
+        state.messages.append(c_dump)
+        yield {"type": "message", "session_id": state.session_id, "message": c_dump}
 
         yield {
             "type": "done",

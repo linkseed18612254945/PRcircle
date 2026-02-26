@@ -19,7 +19,7 @@
       button:hover{background:var(--pri2)} button:disabled{background:#94a3b8;cursor:not-allowed}
       .btn-danger{background:var(--warn)} .btn-danger:hover{background:var(--warn2)}
       .msg{padding:12px;border-radius:10px;margin:8px 0;line-height:1.6;border:1px solid transparent}
-      .A{background:#eff6ff;border-color:#bfdbfe}.B{background:#fff1f2;border-color:#fecdd3}.user{background:#f1f5f9;border-color:#cbd5e1}
+      .A{background:#eff6ff;border-color:#bfdbfe}.B{background:#fff1f2;border-color:#fecdd3}.C{background:#ecfeff;border-color:#a5f3fc}.user{background:#f1f5f9;border-color:#cbd5e1}
       .retrieval{font-size:12px;color:#334155;margin-top:8px}.muted{color:var(--sub);font-size:13px}
       .title{margin:0 0 8px 0}
 
@@ -76,6 +76,12 @@
           <div class="row"><input id="b_model" value="gpt-4o-mini" placeholder="model_name" /><input id="b_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
           <div class="row"><input id="b_key" placeholder="api_key" /><input id="b_temp" value="0.7" /><input id="b_max" value="800" /></div>
           <div class="row"><textarea id="b_capability" placeholder="Agent B能力偏好提示词（可配置）" style="width:100%;min-height:90px;">偏向挑战假设、提出反例与可复现实验。</textarea></div>
+        </div>
+        <div class="card">
+          <h3 class="title">Agent C（观察总结者）配置</h3>
+          <div class="row"><input id="c_model" value="gpt-4o-mini" placeholder="model_name" /><input id="c_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+          <div class="row"><input id="c_key" placeholder="api_key" /><input id="c_temp" value="0.7" /><input id="c_max" value="1000" /></div>
+          <div class="row"><textarea id="c_capability" placeholder="Agent C能力偏好提示词（可配置）" style="width:100%;min-height:90px;">偏向形成可执行的最终策略报告，明确优先级、风险预案和监测指标。</textarea></div>
         </div>
         <div class="card">
           <h3 class="title">Tavily 配置</h3>

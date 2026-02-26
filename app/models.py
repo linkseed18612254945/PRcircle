@@ -32,7 +32,7 @@ class SearchDirective(BaseModel):
 
 
 class AgentMessage(BaseModel):
-    role: Literal["A", "B"]
+    role: Literal["A", "B", "C"]
     content: str
     structured: dict[str, Any] = Field(default_factory=dict)
     retrievals: list[RetrievalResult] = Field(default_factory=list)
@@ -95,6 +95,7 @@ class RunRequest(BaseModel):
     max_rounds: int = 4
     agentA_config: AgentConfig
     agentB_config: AgentConfig
+    agentC_config: AgentConfig
     tavily_api_key: str
     search_topk: int = 5
     search_domains: list[str] = Field(default_factory=list)

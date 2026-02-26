@@ -278,6 +278,7 @@ startBtn.addEventListener('click', async () => {
     max_rounds: Number(document.getElementById('maxRounds').value),
     agentA_config: cfg('a'),
     agentB_config: cfg('b'),
+    agentC_config: cfg('c'),
     tavily_api_key: document.getElementById('tavilyKey').value,
     search_topk: Number(document.getElementById('searchTopk').value),
     search_domains: document.getElementById('searchDomains').value.split(',').map(s => s.trim()).filter(Boolean),

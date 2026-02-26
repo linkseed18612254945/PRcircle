@@ -239,6 +239,14 @@ call_llm(messages, config) -> str
     "max_tokens": 800,
     "capability_prompt": "偏向挑战假设、提出反例与可复现实验。"
   },
+  "agentC_config": {
+    "model_name": "gpt-4o-mini",
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "<YOUR_KEY>",
+    "temperature": 0.7,
+    "max_tokens": 1000,
+    "capability_prompt": "偏向形成可执行的最终策略报告，明确优先级、风险预案和监测指标。"
+  },
   "tavily_api_key": "<TAVILY_KEY>",
   "search_topk": 5,
   "search_domains": ["reddit.com", "ptt.cc"]
@@ -350,6 +358,14 @@ curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
       "temperature": 0.7,
       "max_tokens": 600,
       "capability_prompt": "偏向挑战假设、提出反例与可复现实验。"
+    },
+    "agentC_config": {
+      "model_name": "gpt-4o-mini",
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "YOUR_OPENAI_KEY",
+      "temperature": 0.7,
+      "max_tokens": 900,
+      "capability_prompt": "偏向形成可执行的最终策略报告，明确优先级、风险预案和监测指标。"
     },
     "tavily_api_key": "YOUR_TAVILY_KEY",
     "search_topk": 5,

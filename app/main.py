@@ -8,10 +8,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .agents import AnalysisAgent, ChallengeAgent
+from .agents import AnalysisAgent, ChallengeAgent, ObserverAgent
 from .dialogue_engine import DialogueEngine
 from .models import RunRequest, RunResponse
-from .prompts import ANALYSIS_LOGIC_PROMPT, CHALLENGE_LOGIC_PROMPT
+from .prompts import ANALYSIS_LOGIC_PROMPT, CHALLENGE_LOGIC_PROMPT, OBSERVER_LOGIC_PROMPT
 from .search_tool import TavilySearchTool
 
 app = FastAPI(title="Multi-Agent Analysis MVP")
@@ -47,7 +47,17 @@ def build_engine(req: RunRequest) -> DialogueEngine:
         search_topk=req.search_topk,
         default_search_domains=req.search_domains,
     )
-    return DialogueEngine(analysis_agent=agent_a, challenge_agent=agent_b)
+    agent_c = ObserverAgent(
+        agent_id="C",
+        role="analysis",
+        llm_config=req.agentC_config,
+        system_prompt=OBSERVER_LOGIC_PROMPT,
+        capability_prompt=req.agentC_config.capability_prompt,
+        search_tool=search_tool,
+        search_topk=req.search_topk,
+        default_search_domains=req.search_domains,
+    )
+    return DialogueEngine(analysis_agent=agent_a, challenge_agent=agent_b, observer_agent=agent_c)
 
 
 @app.post("/api/run", response_model=RunResponse)

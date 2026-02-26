@@ -314,3 +314,44 @@ class ChallengeAgent(BaseAgent):
             search_queries=[d.query for d in search_directives],
             search_directives=search_directives,
         )
+
+
+class ObserverAgent(BaseAgent):
+    async def generate(self, state: DialogueState) -> AgentMessage:
+        dialogue_lines: list[str] = []
+        for m in state.messages:
+            role = m.get("role", "")
+            if role not in {"A", "B"}:
+                continue
+            content = str(m.get("content", "")).strip()
+            if content:
+                dialogue_lines.append(f"{role}: {content[:900]}")
+
+        focus_intel = state.intel_pool[-8:]
+        intel_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:180]}" for r in focus_intel]) or "无"
+
+        user_prompt = (
+            f"话题: {state.topic}\n"
+            f"时间背景: {state.time_context or '未提供'}\n"
+            f"PR目标: {state.pr_goal or '未提供'}\n"
+            f"A/B讨论记录（按时间顺序）:\n" + "\n".join(dialogue_lines[-16:]) + "\n"
+            f"共享情报池摘要:\n{intel_digest}\n"
+            f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
+            "请输出最终策略报告，要求可直接给PR团队执行。"
+        )
+
+        response = await self.call_llm(
+            [
+                {"role": "system", "content": self._build_system_prompt()},
+                {"role": "user", "content": user_prompt},
+            ]
+        )
+        return AgentMessage(
+            role="C",
+            content=response,
+            structured=self._try_extract_json(response),
+            retrievals=[],
+            citation_sources=focus_intel,
+            search_queries=[],
+            search_directives=[],
+        )
