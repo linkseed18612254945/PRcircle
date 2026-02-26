@@ -12,7 +12,7 @@
 
 ## 1. 项目目标
 
-用户输入一个分析话题后，系统执行多轮智能体互动分析：
+用户输入政治热点事件主题、时间背景和PR目标后，系统执行多轮智能体互动分析：
 
 1. A 给出结构化分析方案
 2. B 基于 A 的输出进行批评和挑战，提出 required mutations 与 test cases
@@ -219,7 +219,9 @@ call_llm(messages, config) -> str
 
 ```json
 {
-  "topic": "如何构建可解释的个性化学习路径系统",
+  "topic": "某热点事件中的品牌舆情应对",
+  "time_context": "事件发酵后72小时，平台讨论量持续上升",
+  "pr_goal": "控制负面扩散并重建中立认知",
   "max_rounds": 4,
   "agentA_config": {
     "model_name": "gpt-4o-mini",
@@ -280,7 +282,7 @@ call_llm(messages, config) -> str
 页面包含两个 Tab：
 
 1. **Chat**
-   - 输入 Topic
+   - 输入热点 Topic + 时间背景 + PR目标
    - 设置 `max_rounds`
    - 点击 Start 发起分析
    - 流式展示消息，支持查看 structured（若存在）与检索来源
@@ -328,7 +330,9 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
   -H 'Content-Type: application/json' \
   -d '{
-    "topic": "如何设计低成本在线实验验证商业假设",
+    "topic": "某热点事件中的品牌舆情应对",
+    "time_context": "事件发酵后72小时，平台讨论量持续上升",
+    "pr_goal": "控制负面扩散并重建中立认知",
     "max_rounds": 2,
     "agentA_config": {
       "model_name": "gpt-4o-mini",

@@ -46,6 +46,8 @@ class UserMessage(BaseModel):
 class DialogueState(BaseModel):
     session_id: str
     topic: str
+    time_context: str = ""
+    pr_goal: str = ""
     turn_index: int = 0
     max_rounds: int = 4
     messages: list[dict[str, Any]] = Field(default_factory=list)
@@ -81,6 +83,8 @@ class DialogueState(BaseModel):
 
 class RunRequest(BaseModel):
     topic: str
+    time_context: str = ""
+    pr_goal: str = ""
     session_id: str | None = None
     max_rounds: int = 4
     agentA_config: AgentConfig

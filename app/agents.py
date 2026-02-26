@@ -102,6 +102,8 @@ class BaseAgent(ABC):
         planner_prompt = (
             f"你是{self.role}检索规划器。\n"
             f"话题: {state.topic}\n"
+            f"时间背景: {state.time_context or '未提供'}\n"
+            f"PR目标: {state.pr_goal or '未提供'}\n"
             f"当前轮次: {state.turn_index}\n"
             f"对方最新观点/问题: {counterpart_message[:600] or '无'}\n"
             f"我方上一轮结论: {own_last_message[:600] or '无'}\n"
@@ -134,9 +136,9 @@ class BaseAgent(ABC):
             counter_keywords = " ".join(self._extract_keywords(counterpart_message, maxn=4)) or "核心假设"
             own_keywords = " ".join(self._extract_keywords(own_last_message, maxn=4)) or "当前结论"
             queries = [
-                f"{state.topic} 机制路径 {own_keywords} 证据 数据",
-                f"{state.topic} 风险边界 {counter_keywords} 反例 案例",
-                f"{state.topic} 验证实验 指标 对照研究 {counter_keywords}",
+                f"{state.topic} {state.time_context} 舆情走势 机制路径 {own_keywords} 证据 数据",
+                f"{state.topic} {state.pr_goal} 传播风险 边界 {counter_keywords} 反例 案例",
+                f"{state.topic} {state.pr_goal} 传播策略 验证实验 指标 对照研究 {counter_keywords}",
             ]
 
         deduped = state.add_queries(queries)
@@ -172,6 +174,8 @@ class AnalysisAgent(BaseAgent):
 
         user_prompt = (
             f"话题: {state.topic}\n"
+            f"时间背景: {state.time_context or '未提供'}\n"
+            f"PR目标: {state.pr_goal or '未提供'}\n"
             f"当前轮次: {state.turn_index}\n"
             f"Agent B 上一轮内容（请先回答其中的问题）:\n{prior_questions}\n"
             f"本轮检索词（思考结果）:\n- " + "\n- ".join(search_queries) + "\n"
@@ -221,6 +225,8 @@ class ChallengeAgent(BaseAgent):
 
         user_prompt = (
             f"话题: {state.topic}\n"
+            f"时间背景: {state.time_context or '未提供'}\n"
+            f"PR目标: {state.pr_goal or '未提供'}\n"
             f"分析者最新输出:\n{a_reference}\n"
             f"本轮检索词（思考结果）:\n- " + "\n- ".join(search_queries) + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"

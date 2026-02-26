@@ -12,14 +12,45 @@ class DialogueEngine:
         self.analysis_agent = analysis_agent
         self.challenge_agent = challenge_agent
 
-    def create_state(self, topic: str, max_rounds: int, session_id: str | None = None) -> DialogueState:
+    def create_state(
+        self,
+        topic: str,
+        max_rounds: int,
+        session_id: str | None = None,
+        time_context: str = "",
+        pr_goal: str = "",
+    ) -> DialogueState:
         sid = session_id or str(uuid.uuid4())
-        state = DialogueState(session_id=sid, topic=topic, max_rounds=max_rounds)
-        state.messages.append(UserMessage(content=topic).model_dump())
+        state = DialogueState(
+            session_id=sid,
+            topic=topic,
+            time_context=time_context,
+            pr_goal=pr_goal,
+            max_rounds=max_rounds,
+        )
+        state.messages.append(
+            UserMessage(
+                content=topic,
+                structured={"time_context": time_context, "pr_goal": pr_goal},
+            ).model_dump()
+        )
         return state
 
-    async def run(self, topic: str, max_rounds: int, session_id: str | None = None) -> DialogueState:
-        state = self.create_state(topic=topic, max_rounds=max_rounds, session_id=session_id)
+    async def run(
+        self,
+        topic: str,
+        max_rounds: int,
+        session_id: str | None = None,
+        time_context: str = "",
+        pr_goal: str = "",
+    ) -> DialogueState:
+        state = self.create_state(
+            topic=topic,
+            max_rounds=max_rounds,
+            session_id=session_id,
+            time_context=time_context,
+            pr_goal=pr_goal,
+        )
         async for _ in self.run_stream(state):
             pass
         return state

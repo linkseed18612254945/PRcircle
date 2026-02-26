@@ -12,7 +12,7 @@ let isRunning = false;
 
 function createSession(name = null) {
   const id = crypto.randomUUID();
-  sessions.set(id, { id, name: name || `会话 ${sessions.size + 1}`, topic: '', messages: [] });
+  sessions.set(id, { id, name: name || `会话 ${sessions.size + 1}`, topic: '', time_context: '', pr_goal: '', messages: [] });
   return id;
 }
 
@@ -31,6 +31,8 @@ function switchSession(id) {
   activeSessionId = id;
   const session = sessions.get(id);
   document.getElementById('topic').value = session.topic || '';
+  document.getElementById('timeContext').value = session.time_context || '';
+  document.getElementById('prGoal').value = session.pr_goal || '';
   renderMessages(session.messages || []);
   runStatus.textContent = isRunning ? '运行中...' : '已切换会话';
 }
@@ -167,6 +169,8 @@ function setRunning(running) {
   startBtn.disabled = running;
   clearSessionBtn.disabled = running;
   document.getElementById('topic').disabled = running;
+  document.getElementById('timeContext').disabled = running;
+  document.getElementById('prGoal').disabled = running;
   document.getElementById('maxRounds').disabled = running;
   sessionSelect.disabled = running;
   newSessionBtn.disabled = running;
@@ -245,17 +249,25 @@ startBtn.addEventListener('click', async () => {
   if (!activeSessionId) activeSessionId = createSession();
 
   const topic = document.getElementById('topic').value.trim();
-  if (!topic) return alert('请输入 topic');
+  const timeContext = document.getElementById('timeContext').value.trim();
+  const prGoal = document.getElementById('prGoal').value.trim();
+  if (!topic) return alert('请输入热点事件主题');
+  if (!timeContext) return alert('请输入时间背景');
+  if (!prGoal) return alert('请输入PR目标');
 
   const sid = activeSessionId;
   const session = sessions.get(sid);
   session.topic = topic;
+  session.time_context = timeContext;
+  session.pr_goal = prGoal;
   session.name = topic.slice(0, 20) || session.name;
   refreshSessionOptions();
 
   const payload = {
     session_id: sid,
     topic,
+    time_context: timeContext,
+    pr_goal: prGoal,
     max_rounds: Number(document.getElementById('maxRounds').value),
     agentA_config: cfg('a'),
     agentB_config: cfg('b'),
@@ -288,8 +300,12 @@ clearSessionBtn.addEventListener('click', () => {
   const session = sessions.get(activeSessionId);
   if (!session) return;
   session.topic = '';
+  session.time_context = '';
+  session.pr_goal = '';
   session.messages = [];
   document.getElementById('topic').value = '';
+  document.getElementById('timeContext').value = '';
+  document.getElementById('prGoal').value = '';
   renderMessages([]);
   runStatus.textContent = '已清理当前会话并重置状态';
 });
