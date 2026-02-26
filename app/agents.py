@@ -51,19 +51,22 @@ class BaseAgent(ABC):
     def _build_system_prompt(self) -> str:
         return f"{self.system_prompt}\n\n能力偏好：\n{self.capability_prompt or '无'}"
 
-    def _extract_keywords(self, text: str, maxn: int = 8) -> list[str]:
+    def _extract_keywords(self, text: str, maxn: int = 10) -> list[str]:
         tokens = re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", text)
         seen: set[str] = set()
         keywords: list[str] = []
         for token in tokens:
-            t = token.lower()
-            if t in seen:
+            low = token.lower()
+            if low in seen:
                 continue
-            seen.add(t)
+            seen.add(low)
             keywords.append(token)
             if len(keywords) >= maxn:
                 break
         return keywords
+
+    def _normalize_query(self, query: str) -> str:
+        return " ".join(query.lower().split())
 
     def _intel_digest(self, state: DialogueState, topn: int = 6) -> str:
         if not state.intel_pool:
@@ -84,14 +87,31 @@ class BaseAgent(ABC):
         ranked = sorted(state.intel_pool, key=score, reverse=True)
         return ranked[:topn]
 
-
     def _format_citation_catalog(self, sources: list[RetrievalResult]) -> str:
         if not sources:
             return "无"
-        lines = []
-        for idx, src in enumerate(sources, start=1):
-            lines.append(f"[R{idx}] {src.title} | {src.url}")
-        return "\n".join(lines)
+        return "\n".join([f"[R{idx}] {src.title} | {src.url}" for idx, src in enumerate(sources, start=1)])
+
+    def _keep_specific_queries(self, queries: list[str], max_count: int = 4) -> list[str]:
+        abstract = {"策略", "风险", "舆情", "传播", "问题", "事件", "影响", "机制", "分析", "方向"}
+        kept: list[str] = []
+        seen: set[str] = set()
+        for query in queries:
+            q = query.strip()
+            if not q:
+                continue
+            norm = self._normalize_query(q)
+            if norm in seen:
+                continue
+            tokens = self._extract_keywords(q, maxn=16)
+            specific_tokens = [t for t in tokens if t not in abstract]
+            if len(specific_tokens) < 2:
+                continue
+            seen.add(norm)
+            kept.append(q)
+            if len(kept) >= max_count:
+                break
+        return kept
 
     async def _plan_search_queries(
         self,
@@ -108,11 +128,19 @@ class BaseAgent(ABC):
             f"对方最新观点/问题: {counterpart_message[:600] or '无'}\n"
             f"我方上一轮结论: {own_last_message[:600] or '无'}\n"
             f"共享情报池摘要:\n{self._intel_digest(state)}\n\n"
-            "请输出3条检索规划，每条必须包含 direction / understanding / verification / query 字段。\n"
-            "其中query要把方向、当前理解和验证意图融合成一个完整检索词。\n"
-            "输出格式：仅输出 JSON 数组。"
+            "请按以下步骤构建检索词，再输出4条结果(JSON数组字符串)：\n"
+            "步骤1【提炼对象】：先从上下文中提炼具体对象词（人物/机构/平台/城市/政策名/话题标签）。\n"
+            "步骤2【锁定意图】：为每条词指定一个检索意图（事实核验/反例查找/传播链路/合规边界）。\n"
+            "步骤3【组合结构】：按“对象词 + 时间或场景 + 冲突点/争议点 + 证据类型”拼接。\n"
+            "步骤4【发散隐藏变量】：至少1条加入隐藏变量，如利益相关方、二阶影响、执行约束。\n"
+            "步骤5【去同质化】：4条词必须角度不同，不能只是同义改写。\n"
+            "输出要求：\n"
+            "- 每条都必须是可直接搜索的完整短句；\n"
+            "- 避免抽象空词（如：策略、风险、舆情分析）；\n"
+            "- 尽量使用具体名词和可验证线索词（通报/判例/数据截图/时间线/原始信源）。"
         )
-        queries: list[str] = []
+
+        planned: list[str] = []
         try:
             raw = await self.call_llm(
                 [
@@ -123,30 +151,34 @@ class BaseAgent(ABC):
             parsed = json.loads(raw)
             if isinstance(parsed, list):
                 for item in parsed:
-                    if isinstance(item, dict):
-                        query = str(item.get("query", "")).strip()
-                        if query:
-                            queries.append(query)
-                    elif isinstance(item, str) and item.strip():
-                        queries.append(item.strip())
+                    if isinstance(item, str):
+                        planned.append(item.strip())
+                    elif isinstance(item, dict):
+                        planned.append(str(item.get("query", "")).strip())
         except Exception:
             pass
 
+        queries = self._keep_specific_queries(planned, max_count=4)
         if not queries:
-            counter_keywords = " ".join(self._extract_keywords(counterpart_message, maxn=4)) or "核心假设"
-            own_keywords = " ".join(self._extract_keywords(own_last_message, maxn=4)) or "当前结论"
+            seed_terms = self._extract_keywords(
+                f"{state.topic} {state.time_context} {state.pr_goal} {counterpart_message} {own_last_message}",
+                maxn=6,
+            )
+            seed_a = seed_terms[0] if len(seed_terms) > 0 else "涉事机构"
+            seed_b = seed_terms[1] if len(seed_terms) > 1 else "核心平台"
             queries = [
-                f"{state.topic} {state.time_context} 舆情走势 机制路径 {own_keywords} 证据 数据",
-                f"{state.topic} {state.pr_goal} 传播风险 边界 {counter_keywords} 反例 案例",
-                f"{state.topic} {state.pr_goal} 传播策略 验证实验 指标 对照研究 {counter_keywords}",
+                f"{state.topic} {seed_a} 时间线 关键节点 原始信源",
+                f"{state.topic} {seed_b} 话题标签 扩散路径 数据截图",
+                f"{state.topic} {state.pr_goal} 监管口径 政策条款 公开通报",
+                f"{state.topic} {seed_a} 隐性关联方 二阶影响 反向案例",
             ]
+            queries = self._keep_specific_queries(queries, max_count=4)
 
         deduped = state.add_queries(queries)
         if deduped:
-            return deduped[:3]
+            return deduped[:4]
 
-        # All planned queries are duplicates; force a novelty suffix using round index.
-        return [f"{query} round{state.turn_index}" for query in queries[:3]]
+        return [f"{q} round{state.turn_index}" for q in queries[:4]]
 
 
 class AnalysisAgent(BaseAgent):
@@ -168,9 +200,7 @@ class AnalysisAgent(BaseAgent):
 
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, prior_questions)
-        retrieval_digest = "\n".join(
-            [f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel]
-        )
+        retrieval_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel])
 
         user_prompt = (
             f"话题: {state.topic}\n"
@@ -178,7 +208,7 @@ class AnalysisAgent(BaseAgent):
             f"PR目标: {state.pr_goal or '未提供'}\n"
             f"当前轮次: {state.turn_index}\n"
             f"Agent B 上一轮内容（请先回答其中的问题）:\n{prior_questions}\n"
-            f"本轮检索词（思考结果）:\n- " + "\n- ".join(search_queries) + "\n"
+            f"本轮检索词（具体关键词）:\n- " + "\n- ".join(search_queries) + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"
             f"当前相关证据（从共享池按相关性筛选）:\n{retrieval_digest or '无'}\n"
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
@@ -219,16 +249,14 @@ class ChallengeAgent(BaseAgent):
 
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, a_reference)
-        retrieval_digest = "\n".join(
-            [f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel]
-        )
+        retrieval_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel])
 
         user_prompt = (
             f"话题: {state.topic}\n"
             f"时间背景: {state.time_context or '未提供'}\n"
             f"PR目标: {state.pr_goal or '未提供'}\n"
             f"分析者最新输出:\n{a_reference}\n"
-            f"本轮检索词（思考结果）:\n- " + "\n- ".join(search_queries) + "\n"
+            f"本轮检索词（具体关键词）:\n- " + "\n- ".join(search_queries) + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"
             f"当前相关证据（从共享池按相关性筛选）:\n{retrieval_digest or '无'}\n"
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
