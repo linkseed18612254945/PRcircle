@@ -1,366 +1,434 @@
 /* ============================================================
-   PRcircle – Frontend Application
-   - Session management
-   - Streaming SSE with robust buffering & error recovery
-   - Modern message rendering with markdown support
-   - Progress tracking & typing indicators
+   PRcircle – Frontend Application  (v2 – full rewrite)
+
+   Key design decisions:
+   1. INCREMENTAL rendering – only append new DOM nodes; never
+      clear + re-render the entire message list.  This fixes
+      flicker, scroll-jumping, and collapsed <details> resets.
+   2. Rich metadata components – search directives as pill tags,
+      retrieval results as mini-cards, citations as numbered refs.
+   3. Phase-aware UI – the backend now emits `round_start` and
+      `phase` events; we surface them as round dividers and an
+      "active agent" panel with a spinner.
    ============================================================ */
 
-// ===== DOM References =====
-const tabs = document.querySelectorAll('.nav-tab');
-const pages = document.querySelectorAll('.page');
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const newSessionBtn = document.getElementById('newSessionBtn');
+// ===== DOM refs =====
+const tabs           = document.querySelectorAll('.nav-tab');
+const pages          = document.querySelectorAll('.page');
+const startBtn       = document.getElementById('startBtn');
+const stopBtn        = document.getElementById('stopBtn');
+const newSessionBtn  = document.getElementById('newSessionBtn');
 const clearSessionBtn = document.getElementById('clearSessionBtn');
-const sessionSelect = document.getElementById('sessionSelect');
-const runStatus = document.getElementById('runStatus');
-const statusDot = document.getElementById('statusDot');
-const progressWrap = document.getElementById('progressWrap');
-const progressFill = document.getElementById('progressFill');
-const progressLabel = document.getElementById('progressLabel');
-const progressPct = document.getElementById('progressPct');
-const typingIndicator = document.getElementById('typingIndicator');
-const typingLabel = document.getElementById('typingLabel');
-const messagesArea = document.getElementById('messages');
+const sessionSelect  = document.getElementById('sessionSelect');
+const runStatus      = document.getElementById('runStatus');
+const statusDot      = document.getElementById('statusDot');
+const progressWrap   = document.getElementById('progressWrap');
+const progressFill   = document.getElementById('progressFill');
+const progressLabel  = document.getElementById('progressLabel');
+const progressPct    = document.getElementById('progressPct');
+const agentPanel     = document.getElementById('agentPanel');
+const agentPanelAvatar = document.getElementById('agentPanelAvatar');
+const agentPanelName = document.getElementById('agentPanelName');
+const agentPanelPhase = document.getElementById('agentPanelPhase');
+const messagesArea   = document.getElementById('messages');
+const emptyState     = document.getElementById('emptyState');
+const msgCountEl     = document.getElementById('msgCount');
 
 // ===== State =====
-const sessions = new Map();
-let activeSessionId = null;
-let isRunning = false;
-let abortController = null;
-let currentMaxRounds = 3;
-let currentRound = 0;
-let messageCount = 0;
+const sessions       = new Map();
+let activeSessionId  = null;
+let isRunning        = false;
+let abortController  = null;
+let maxRounds        = 3;
+let renderedCount    = 0;   // how many messages already in DOM
 
-// ===== Role Labels =====
-const ROLE_LABELS = {
-  A: 'Agent A - Analyst',
-  B: 'Agent B - Challenger',
-  C: 'Agent C - Observer',
-  user: 'User',
-};
+// ===== Constants =====
+const ROLE_LABELS = { A: 'Agent A · Analyst', B: 'Agent B · Challenger', C: 'Agent C · Observer', user: 'User' };
+const ROLE_SHORT  = { A: 'Analyst', B: 'Challenger', C: 'Observer', user: 'User' };
+const PHASE_LABELS = { searching: 'Searching & retrieving evidence...', generating: 'Generating response...', synthesizing: 'Synthesizing final report...' };
 
-// ===== Session Management =====
-function createSession(name = null) {
+// SVG icons (inline, tiny)
+const SEARCH_ICON = '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="#fff" stroke-width="2"/><line x1="11" y1="11" x2="15" y2="15" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>';
+const LINK_ICON = '<svg viewBox="0 0 16 16"><path d="M6.5 9.5a3.5 3.5 0 005-5l-1-1a3.5 3.5 0 00-5 0l-.5.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9.5 6.5a3.5 3.5 0 00-5 5l1 1a3.5 3.5 0 005 0l.5-.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+
+// ======================================================================
+//  Session management
+// ======================================================================
+function createSession(name) {
   const id = crypto.randomUUID();
-  sessions.set(id, {
-    id,
-    name: name || `Session ${sessions.size + 1}`,
-    topic: '',
-    time_context: '',
-    pr_goal: '',
-    messages: [],
-  });
+  sessions.set(id, { id, name: name || `Session ${sessions.size + 1}`, topic: '', time_context: '', pr_goal: '', messages: [] });
   return id;
 }
 
 function refreshSessionOptions() {
   sessionSelect.innerHTML = '';
-  sessions.forEach((session) => {
-    const opt = document.createElement('option');
-    opt.value = session.id;
-    opt.textContent = `${session.name} (${session.id.slice(0, 8)})`;
-    sessionSelect.appendChild(opt);
+  sessions.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id;
+    o.textContent = `${s.name} (${s.id.slice(0, 8)})`;
+    sessionSelect.appendChild(o);
   });
   if (activeSessionId) sessionSelect.value = activeSessionId;
 }
 
 function switchSession(id) {
   activeSessionId = id;
-  const session = sessions.get(id);
-  if (!session) return;
-  document.getElementById('topic').value = session.topic || '';
-  document.getElementById('timeContext').value = session.time_context || '';
-  document.getElementById('prGoal').value = session.pr_goal || '';
-  renderMessages(session.messages || []);
+  const s = sessions.get(id);
+  if (!s) return;
+  document.getElementById('topic').value = s.topic || '';
+  document.getElementById('timeContext').value = s.time_context || '';
+  document.getElementById('prGoal').value = s.pr_goal || '';
+  // Full render when switching sessions (necessary)
+  fullRender(s.messages);
   if (!isRunning) setStatus('idle', 'Ready');
 }
 
-// ===== Tab Navigation =====
-tabs.forEach((tab) => {
+// ======================================================================
+//  Tab navigation
+// ======================================================================
+tabs.forEach(tab => {
   tab.addEventListener('click', () => {
-    tabs.forEach((t) => t.classList.remove('active'));
-    pages.forEach((p) => p.classList.remove('active'));
+    tabs.forEach(t => t.classList.remove('active'));
+    pages.forEach(p => p.classList.remove('active'));
     tab.classList.add('active');
     document.getElementById(tab.dataset.target).classList.add('active');
   });
 });
 
-// ===== Config Extraction =====
+// ======================================================================
+//  Config extraction
+// ======================================================================
 function cfg(prefix) {
   return {
     model_name: document.getElementById(`${prefix}_model`).value,
-    base_url: document.getElementById(`${prefix}_base`).value,
-    api_key: document.getElementById(`${prefix}_key`).value,
+    base_url:   document.getElementById(`${prefix}_base`).value,
+    api_key:    document.getElementById(`${prefix}_key`).value,
     temperature: Number(document.getElementById(`${prefix}_temp`).value),
-    max_tokens: Number(document.getElementById(`${prefix}_max`).value),
+    max_tokens:  Number(document.getElementById(`${prefix}_max`).value),
     capability_prompt: document.getElementById(`${prefix}_capability`).value,
   };
 }
 
-// ===== HTML Escaping =====
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// ======================================================================
+//  Helpers
+// ======================================================================
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
 
-// ===== Inline Markdown =====
 function inlineMarkdown(text) {
   return text
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener">$1</a>'
-    );
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
 }
 
-// ===== Markdown to HTML =====
-function markdownToHtml(rawText) {
-  const safe = escapeHtml(String(rawText || '')).replace(/\r\n/g, '\n');
+function markdownToHtml(raw) {
+  const safe = escapeHtml(String(raw || '')).replace(/\r\n/g, '\n');
   const lines = safe.split('\n');
-  let html = '';
-  let inList = false;
-  let inCodeBlock = false;
-  let codeContent = '';
+  let html = '', inList = false, inCode = false, code = '';
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
 
-  const closeList = () => {
-    if (inList) {
-      html += '</ul>';
-      inList = false;
-    }
-  };
-
-  lines.forEach((line) => {
-    // Handle code blocks (``` fenced)
+  for (const line of lines) {
     if (line.trimStart().startsWith('```')) {
-      if (inCodeBlock) {
-        html += `<pre><code>${codeContent}</code></pre>`;
-        codeContent = '';
-        inCodeBlock = false;
-      } else {
-        closeList();
-        inCodeBlock = true;
-      }
-      return;
+      if (inCode) { html += `<pre><code>${code}</code></pre>`; code = ''; inCode = false; }
+      else { closeList(); inCode = true; }
+      continue;
     }
-    if (inCodeBlock) {
-      codeContent += (codeContent ? '\n' : '') + line;
-      return;
+    if (inCode) { code += (code ? '\n' : '') + line; continue; }
+    if (!line.trim()) { closeList(); continue; }
+    if (line.startsWith('#### '))  { closeList(); html += `<h5>${inlineMarkdown(line.slice(5))}</h5>`; continue; }
+    if (line.startsWith('### '))   { closeList(); html += `<h4>${inlineMarkdown(line.slice(4))}</h4>`; continue; }
+    if (line.startsWith('## '))    { closeList(); html += `<h3>${inlineMarkdown(line.slice(3))}</h3>`; continue; }
+    if (line.startsWith('# '))     { closeList(); html += `<h2>${inlineMarkdown(line.slice(2))}</h2>`; continue; }
+    if (line.startsWith('&gt; '))  { closeList(); html += `<blockquote>${inlineMarkdown(line.slice(5))}</blockquote>`; continue; }
+    if (/^\d+\.\s+/.test(line) || /^[-*]\s+/.test(line)) {
+      if (!inList) { html += '<ul>'; inList = true; }
+      html += `<li>${inlineMarkdown(line.replace(/^(\d+\.\s+|[-*]\s+)/, ''))}</li>`;
+      continue;
     }
-
-    // Empty lines
-    if (!line.trim()) {
-      closeList();
-      return;
-    }
-
-    // Headers (#### → h5, ### → h4, ## → h3, # → h2)
-    if (line.startsWith('#### ')) {
-      closeList();
-      html += `<h5>${inlineMarkdown(line.slice(5))}</h5>`;
-      return;
-    }
-    if (line.startsWith('### ')) {
-      closeList();
-      html += `<h4>${inlineMarkdown(line.slice(4))}</h4>`;
-      return;
-    }
-    if (line.startsWith('## ')) {
-      closeList();
-      html += `<h3>${inlineMarkdown(line.slice(3))}</h3>`;
-      return;
-    }
-    if (line.startsWith('# ')) {
-      closeList();
-      html += `<h2>${inlineMarkdown(line.slice(2))}</h2>`;
-      return;
-    }
-
-    // Blockquote
-    if (line.startsWith('&gt; ')) {
-      closeList();
-      html += `<blockquote>${inlineMarkdown(line.slice(5))}</blockquote>`;
-      return;
-    }
-
-    // Numbered list
-    if (/^\d+\.\s+/.test(line)) {
-      if (!inList) {
-        html += '<ul>';
-        inList = true;
-      }
-      html += `<li>${inlineMarkdown(line.replace(/^\d+\.\s+/, ''))}</li>`;
-      return;
-    }
-
-    // Bullet list
-    if (/^[-*]\s+/.test(line)) {
-      if (!inList) {
-        html += '<ul>';
-        inList = true;
-      }
-      html += `<li>${inlineMarkdown(line.replace(/^[-*]\s+/, ''))}</li>`;
-      return;
-    }
-
     closeList();
     html += `<p>${inlineMarkdown(line)}</p>`;
-  });
-
-  // Close any open blocks
-  if (inCodeBlock && codeContent) {
-    html += `<pre><code>${codeContent}</code></pre>`;
   }
+  if (inCode && code) html += `<pre><code>${code}</code></pre>`;
   closeList();
   return html;
 }
 
-// ===== Format Timestamp =====
-function formatTime(isoStr) {
-  if (!isoStr) return '';
-  try {
-    const d = new Date(isoStr);
-    return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  } catch {
-    return '';
-  }
+function formatTime(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+  catch { return ''; }
 }
 
-// ===== Render Messages =====
-function renderMessages(messages) {
-  if (!messages || messages.length === 0) {
-    messagesArea.innerHTML = `
-      <div class="msg-empty">
-        <div class="msg-empty-icon">&#9672;</div>
-        <div class="msg-empty-text">No messages yet. Configure your topic and click "Start Analysis" to begin.</div>
-      </div>`;
-    return;
-  }
+function extractDomain(url) {
+  try { return new URL(url).hostname.replace('www.', ''); } catch { return ''; }
+}
 
-  messagesArea.innerHTML = '';
-  messages.forEach((m) => {
-    const card = document.createElement('div');
-    card.className = `msg ${m.role}`;
+// ======================================================================
+//  Build a single message DOM node  (the core rendering function)
+// ======================================================================
+function buildMessageNode(m) {
+  const el = document.createElement('div');
+  el.className = `msg ${m.role}`;
 
-    // Header
-    const header = document.createElement('div');
-    header.className = 'msg-header';
+  // --- header ---
+  const hdr = document.createElement('div');
+  hdr.className = 'msg-header';
+  hdr.innerHTML = `
+    <div class="msg-avatar">${m.role === 'user' ? 'U' : m.role}</div>
+    <div class="msg-info">
+      <div class="msg-role">${ROLE_LABELS[m.role] || m.role}</div>
+      <div class="msg-subtitle">
+        ${m.search_directives?.length ? `<span>${m.search_directives.length} searches</span>` : ''}
+        ${m.retrievals?.length ? `<span>${m.retrievals.length} sources retrieved</span>` : ''}
+        ${m.citation_sources?.length ? `<span>${m.citation_sources.length} citations</span>` : ''}
+      </div>
+    </div>
+    <span class="msg-time">${formatTime(m.timestamp)}</span>`;
+  el.appendChild(hdr);
 
-    const avatar = document.createElement('div');
-    avatar.className = 'msg-avatar';
-    avatar.textContent = m.role === 'user' ? 'U' : m.role;
+  // --- content ---
+  const body = document.createElement('div');
+  body.className = 'markdown-body';
+  const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+  body.innerHTML = markdownToHtml(content);
+  el.appendChild(body);
 
-    const roleSpan = document.createElement('span');
-    roleSpan.className = 'msg-role';
-    roleSpan.textContent = ROLE_LABELS[m.role] || m.role;
+  // --- meta sections container ---
+  const hasSearchDir = m.search_directives?.length > 0;
+  const hasSearchQ   = m.search_queries?.length > 0;
+  const hasCitations = m.citation_sources?.length > 0;
+  const hasRetrievals = m.retrievals?.length > 0;
+  const hasStructured = m.structured && Object.keys(m.structured).length > 0;
+  const hasMeta = hasSearchDir || hasSearchQ || hasCitations || hasRetrievals || hasStructured;
 
-    const timeSpan = document.createElement('span');
-    timeSpan.className = 'msg-time';
-    timeSpan.textContent = formatTime(m.timestamp);
+  if (hasMeta) {
+    const meta = document.createElement('div');
+    meta.className = 'meta-sections';
 
-    header.appendChild(avatar);
-    header.appendChild(roleSpan);
-    header.appendChild(timeSpan);
-    card.appendChild(header);
-
-    // Content
-    const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-    const bodyDiv = document.createElement('div');
-    bodyDiv.className = 'markdown-body';
-    bodyDiv.innerHTML = markdownToHtml(content);
-    card.appendChild(bodyDiv);
-
-    // Structured JSON
-    if (m.structured && Object.keys(m.structured).length > 0) {
-      const d = document.createElement('details');
-      const summary = document.createElement('summary');
-      summary.textContent = 'View Structured JSON';
-      d.appendChild(summary);
-      const pre = document.createElement('pre');
-      pre.textContent = JSON.stringify(m.structured, null, 2);
-      d.appendChild(pre);
-      card.appendChild(d);
+    // Search directives (pills)
+    if (hasSearchDir) {
+      const sec = document.createElement('div');
+      sec.innerHTML = `<div class="meta-header"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Search Directives <span class="meta-count">${m.search_directives.length}</span></div>`;
+      const pills = document.createElement('div');
+      pills.className = 'search-directives';
+      m.search_directives.forEach(d => {
+        const pill = document.createElement('span');
+        pill.className = 'search-pill';
+        pill.innerHTML = `<span class="search-pill-icon">${SEARCH_ICON}</span><span class="search-pill-text" title="${escapeHtml(d.query)}">${escapeHtml(d.query)}</span>`;
+        if (d.domains?.length) {
+          d.domains.forEach(dm => {
+            const tag = document.createElement('span');
+            tag.className = 'search-pill-domain';
+            tag.textContent = dm;
+            pill.appendChild(tag);
+          });
+        }
+        pills.appendChild(pill);
+      });
+      sec.appendChild(pills);
+      meta.appendChild(sec);
+    } else if (hasSearchQ) {
+      const sec = document.createElement('div');
+      sec.innerHTML = `<div class="meta-header"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Search Queries <span class="meta-count">${m.search_queries.length}</span></div>`;
+      const pills = document.createElement('div');
+      pills.className = 'search-directives';
+      m.search_queries.forEach(q => {
+        const pill = document.createElement('span');
+        pill.className = 'search-pill';
+        pill.innerHTML = `<span class="search-pill-icon">${SEARCH_ICON}</span><span class="search-pill-text">${escapeHtml(q)}</span>`;
+        pills.appendChild(pill);
+      });
+      sec.appendChild(pills);
+      meta.appendChild(sec);
     }
 
-    // Search Directives
-    if (m.search_directives?.length) {
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      meta.innerHTML =
-        '<div class="msg-meta-title">Search Directives</div>' +
-        '<div class="msg-meta-list">' +
-        m.search_directives
-          .map(
-            (d) =>
-              `&#8226; ${escapeHtml(d.query)}${d.domains?.length ? ' <span class="msg-meta-tag">' + d.domains.map(escapeHtml).join(', ') + '</span>' : ''}`
-          )
-          .join('<br/>') +
-        '</div>';
-      card.appendChild(meta);
-    } else if (m.search_queries?.length) {
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      meta.innerHTML =
-        '<div class="msg-meta-title">Search Queries</div>' +
-        '<div class="msg-meta-list">' +
-        m.search_queries.map((x) => `&#8226; ${escapeHtml(x)}`).join('<br/>') +
-        '</div>';
-      card.appendChild(meta);
-    }
-
-    // Citation Sources
-    if (m.citation_sources?.length) {
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      meta.innerHTML =
-        '<div class="msg-meta-title">Citations</div>' +
-        '<div class="msg-meta-list">' +
-        m.citation_sources
-          .map(
-            (r, idx) =>
-              `[R${idx + 1}] <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title || r.url)}</a>`
-          )
-          .join('<br/>') +
-        '</div>';
-      card.appendChild(meta);
+    // Citations
+    if (hasCitations) {
+      const sec = document.createElement('div');
+      sec.innerHTML = `<div class="meta-header"><svg viewBox="0 0 16 16"><path d="M3 3h10v10H3z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6 7h4M6 9h3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg> Citations <span class="meta-count">${m.citation_sources.length}</span></div>`;
+      const grid = document.createElement('div');
+      grid.className = 'retrieval-grid';
+      m.citation_sources.forEach((r, i) => {
+        grid.appendChild(buildRetrievalCard(r, i + 1, 'cite'));
+      });
+      sec.appendChild(grid);
+      meta.appendChild(sec);
     }
 
     // Retrievals
-    if (m.retrievals?.length) {
-      const meta = document.createElement('div');
-      meta.className = 'msg-meta';
-      meta.innerHTML =
-        '<div class="msg-meta-title">Retrieved Sources</div>' +
-        '<div class="msg-meta-list">' +
-        m.retrievals
-          .map(
-            (r) =>
-              `&#8226; <a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title || r.url)}</a>`
-          )
-          .join('<br/>') +
-        '</div>';
-      card.appendChild(meta);
+    if (hasRetrievals) {
+      const sec = document.createElement('div');
+      sec.innerHTML = `<div class="meta-header"><svg viewBox="0 0 16 16"><path d="M2 4l6-2 6 2v8l-6 2-6-2z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 2v12M2 4l6 2 6-2" fill="none" stroke="currentColor" stroke-width="1.2"/></svg> Retrieved Sources <span class="meta-count">${m.retrievals.length}</span></div>`;
+      const grid = document.createElement('div');
+      grid.className = 'retrieval-grid';
+      m.retrievals.forEach((r, i) => {
+        grid.appendChild(buildRetrievalCard(r, i + 1, 'ret'));
+      });
+      sec.appendChild(grid);
+      meta.appendChild(sec);
     }
 
-    messagesArea.appendChild(card);
-  });
+    // Structured JSON
+    if (hasStructured) {
+      const det = document.createElement('details');
+      const sum = document.createElement('summary');
+      sum.textContent = 'Structured JSON';
+      det.appendChild(sum);
+      const pre = document.createElement('pre');
+      pre.textContent = JSON.stringify(m.structured, null, 2);
+      det.appendChild(pre);
+      meta.appendChild(det);
+    }
 
-  // Auto-scroll to bottom
+    el.appendChild(meta);
+  }
+
+  return el;
+}
+
+// ======================================================================
+//  Retrieval card builder
+// ======================================================================
+function buildRetrievalCard(r, idx, type) {
+  const card = document.createElement('div');
+  card.className = 'retrieval-card';
+  const idxEl = document.createElement('div');
+  idxEl.className = 'retrieval-idx';
+  idxEl.textContent = type === 'cite' ? `R${idx}` : `${idx}`;
+  if (type === 'cite') idxEl.style.background = '#8b5cf6';
+
+  const body = document.createElement('div');
+  body.className = 'retrieval-body';
+
+  const title = document.createElement('div');
+  title.className = 'retrieval-title';
+  if (r.url) {
+    title.innerHTML = `<a href="${escapeHtml(r.url)}" target="_blank" rel="noopener">${escapeHtml(r.title || 'Untitled')}</a>`;
+  } else {
+    title.textContent = r.title || 'Untitled';
+  }
+  body.appendChild(title);
+
+  if (r.url) {
+    const urlEl = document.createElement('div');
+    urlEl.className = 'retrieval-url';
+    urlEl.textContent = extractDomain(r.url) + ' — ' + r.url;
+    body.appendChild(urlEl);
+  }
+
+  if (r.content) {
+    const snippet = document.createElement('div');
+    snippet.className = 'retrieval-snippet';
+    snippet.textContent = r.content.slice(0, 200);
+    body.appendChild(snippet);
+  }
+
+  card.appendChild(idxEl);
+  card.appendChild(body);
+
+  if (r.score > 0) {
+    const score = document.createElement('div');
+    score.className = 'retrieval-score';
+    score.textContent = r.score.toFixed(2);
+    card.appendChild(score);
+  }
+  return card;
+}
+
+// ======================================================================
+//  Round divider builder
+// ======================================================================
+function buildRoundDivider(round, maxR) {
+  const div = document.createElement('div');
+  div.className = 'round-divider';
+  div.innerHTML = `<div class="round-divider-line"></div><div class="round-badge"><span class="round-badge-dot"></span> ROUND ${round} / ${maxR}</div><div class="round-divider-line"></div>`;
+  return div;
+}
+
+function buildSynthesisDivider() {
+  const div = document.createElement('div');
+  div.className = 'round-divider';
+  div.innerHTML = `<div class="round-divider-line"></div><div class="round-badge synthesis"><span class="round-badge-dot"></span> FINAL SYNTHESIS</div><div class="round-divider-line"></div>`;
+  return div;
+}
+
+// ======================================================================
+//  INCREMENTAL append (only add what's new)
+// ======================================================================
+function appendMessage(m) {
+  if (emptyState && emptyState.parentNode) emptyState.remove();
+  messagesArea.appendChild(buildMessageNode(m));
+  renderedCount++;
+  updateMsgCount();
   scrollToBottom();
 }
 
-// ===== Auto-scroll =====
-function scrollToBottom() {
-  requestAnimationFrame(() => {
-    messagesArea.scrollTop = messagesArea.scrollHeight;
-  });
+function appendRoundDivider(round, maxR) {
+  if (emptyState && emptyState.parentNode) emptyState.remove();
+  messagesArea.appendChild(buildRoundDivider(round, maxR));
+  scrollToBottom();
 }
 
-// ===== Status Management =====
+function appendSynthesisDivider() {
+  if (emptyState && emptyState.parentNode) emptyState.remove();
+  messagesArea.appendChild(buildSynthesisDivider());
+  scrollToBottom();
+}
+
+// ======================================================================
+//  FULL render  (used on session switch / clear only)
+// ======================================================================
+function fullRender(messages) {
+  messagesArea.innerHTML = '';
+  renderedCount = 0;
+
+  if (!messages || messages.length === 0) {
+    messagesArea.innerHTML = `<div class="msg-empty" id="emptyState"><div class="msg-empty-icon">&#9672;</div><div class="msg-empty-text">No messages yet.<br/>Configure your topic and click <strong>Start Analysis</strong> to begin.</div></div>`;
+    updateMsgCount();
+    return;
+  }
+
+  // Reconstruct with round dividers inferred from message pattern
+  let round = 0;
+  let aCount = 0;
+  let cSeen = false;
+
+  messages.forEach(m => {
+    if (m.role === 'A') {
+      aCount++;
+      if (aCount === 1 || (aCount > 1 && !cSeen)) {
+        round++;
+        messagesArea.appendChild(buildRoundDivider(round, maxRounds));
+      }
+    }
+    if (m.role === 'C' && !cSeen) {
+      cSeen = true;
+      messagesArea.appendChild(buildSynthesisDivider());
+    }
+    messagesArea.appendChild(buildMessageNode(m));
+    renderedCount++;
+  });
+  updateMsgCount();
+  scrollToBottom();
+}
+
+// ======================================================================
+//  Scroll & counters
+// ======================================================================
+function scrollToBottom() {
+  requestAnimationFrame(() => { messagesArea.scrollTop = messagesArea.scrollHeight; });
+}
+
+function updateMsgCount() {
+  const session = sessions.get(activeSessionId);
+  const count = session ? session.messages.length : 0;
+  msgCountEl.textContent = count ? `${count} message${count > 1 ? 's' : ''}` : '';
+}
+
+// ======================================================================
+//  Status / Progress / Agent panel
+// ======================================================================
 function setStatus(state, text) {
   statusDot.className = 'status-dot';
   if (state === 'running') statusDot.classList.add('running');
@@ -369,48 +437,41 @@ function setStatus(state, text) {
   runStatus.textContent = text;
 }
 
-// ===== Typing Indicator =====
-function showTyping(role) {
-  const label = ROLE_LABELS[role] || role;
-  typingLabel.textContent = `${label} is thinking...`;
-  typingIndicator.classList.add('active');
-  scrollToBottom();
+function showAgentPanel(agent, phase) {
+  const colors = { A: 'var(--a-color)', B: 'var(--b-color)', C: 'var(--c-color)' };
+  agentPanelAvatar.textContent = agent;
+  agentPanelAvatar.style.background = colors[agent] || 'var(--pri)';
+  agentPanelName.textContent = ROLE_LABELS[agent] || agent;
+  agentPanelName.style.color = colors[agent] || 'var(--text)';
+  agentPanelPhase.textContent = PHASE_LABELS[phase] || phase;
+  document.getElementById('agentSpinner').style.borderTopColor = colors[agent] || 'var(--pri)';
+  agentPanel.classList.add('active');
 }
 
-function hideTyping() {
-  typingIndicator.classList.remove('active');
+function hideAgentPanel() {
+  agentPanel.classList.remove('active');
 }
 
-// ===== Progress =====
-function updateProgress(round, maxRounds, phase) {
-  // Each round has 2 phases: Agent A, Agent B.  +1 final for Agent C
-  const totalSteps = maxRounds * 2 + 1;
-  let currentStep = (round - 1) * 2 + (phase === 'B' ? 2 : phase === 'A' ? 1 : 0);
-  if (phase === 'C') currentStep = totalSteps;
-
-  const pct = Math.min(Math.round((currentStep / totalSteps) * 100), 100);
+function updateProgress(round, maxR, phase) {
+  const total = maxR * 2 + 1;
+  let step = (round - 1) * 2 + (phase === 'B' ? 2 : phase === 'A' ? 1 : 0);
+  if (phase === 'C') step = total;
+  const pct = Math.min(Math.round((step / total) * 100), 100);
   progressFill.style.width = pct + '%';
   progressPct.textContent = pct + '%';
-
-  if (phase === 'C') {
-    progressLabel.textContent = 'Final Synthesis';
-  } else {
-    progressLabel.textContent = `Round ${round} / ${maxRounds}`;
-  }
+  progressLabel.textContent = phase === 'C' ? 'Final Synthesis' : `Round ${round} / ${maxR}`;
 }
 
-// ===== UI Lock =====
+// ======================================================================
+//  UI lock
+// ======================================================================
 function setRunning(running) {
   isRunning = running;
   startBtn.disabled = running;
   clearSessionBtn.disabled = running;
-  document.getElementById('topic').disabled = running;
-  document.getElementById('timeContext').disabled = running;
-  document.getElementById('prGoal').disabled = running;
-  document.getElementById('maxRounds').disabled = running;
+  ['topic', 'timeContext', 'prGoal', 'maxRounds'].forEach(id => document.getElementById(id).disabled = running);
   sessionSelect.disabled = running;
   newSessionBtn.disabled = running;
-
   if (running) {
     stopBtn.style.display = 'inline-flex';
     progressWrap.classList.add('active');
@@ -419,130 +480,144 @@ function setRunning(running) {
     setStatus('running', 'Running analysis...');
   } else {
     stopBtn.style.display = 'none';
-    hideTyping();
+    hideAgentPanel();
   }
 }
 
-// ===== SSE Processing (Bug-fixed) =====
+// ======================================================================
+//  SSE chunk processing  (bug-fixed, incremental)
+// ======================================================================
+let currentRound = 0;
+let agentMsgCount = 0;    // counts A/B/C messages (not user)
+let lastSynthDivider = false;
+
 function processSSEChunk(rawChunk, targetSessionId) {
-  // Normalize line endings
   const normalized = rawChunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-  // Extract all data: lines
-  const dataLines = normalized
-    .split('\n')
-    .filter((l) => l.startsWith('data:'))
-    .map((l) => l.slice(5).trimStart());
-
+  const dataLines = normalized.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart());
   if (!dataLines.length) return;
 
-  // BUG FIX: Try parsing each data line individually first,
-  // falling back to joining them (for multi-line JSON payloads).
   let event = null;
   const joined = dataLines.join('\n');
-  try {
-    event = JSON.parse(joined);
-  } catch {
-    // If joined parse fails, try each line individually
+  try { event = JSON.parse(joined); }
+  catch {
     for (const line of dataLines) {
-      try {
-        event = JSON.parse(line);
-        break;
-      } catch {
-        // continue to next line
-      }
+      try { event = JSON.parse(line); break; } catch { /* next */ }
     }
   }
-
   if (!event) return;
 
   const sid = event.session_id || targetSessionId;
   const session = sessions.get(sid);
   if (!session) return;
+  const isActive = (sid === activeSessionId);
 
   switch (event.type) {
-    case 'session_started':
+    case 'session_started': {
       if (event.message) {
         session.messages = [event.message];
-        messageCount = 0;
+        agentMsgCount = 0;
         currentRound = 0;
-      }
-      break;
-
-    case 'message':
-      if (event.message) {
-        session.messages.push(event.message);
-        hideTyping();
-        messageCount++;
-
-        // Track progress: messages come in A, B pairs per round, then C
-        const role = event.message.role;
-        if (role === 'A') {
-          currentRound = Math.ceil(messageCount / 2);
-          updateProgress(currentRound, currentMaxRounds, 'A');
-          // Show typing for next agent (B)
-          showTyping('B');
-        } else if (role === 'B') {
-          updateProgress(currentRound, currentMaxRounds, 'B');
-          // Check if more rounds, show typing for A
-          if (currentRound < currentMaxRounds) {
-            showTyping('A');
-          } else {
-            showTyping('C');
-          }
-        } else if (role === 'C') {
-          updateProgress(currentRound, currentMaxRounds, 'C');
-          hideTyping();
+        lastSynthDivider = false;
+        maxRounds = event.max_rounds || maxRounds;
+        if (isActive) {
+          // Reset DOM
+          messagesArea.innerHTML = '';
+          renderedCount = 0;
+          appendMessage(event.message);
         }
       }
       break;
+    }
 
-    case 'stopped':
-      hideTyping();
-      showTyping('C');
+    case 'round_start': {
+      currentRound = event.round || (currentRound + 1);
+      maxRounds = event.max_rounds || maxRounds;
+      if (isActive) {
+        appendRoundDivider(currentRound, maxRounds);
+        updateProgress(currentRound, maxRounds, 'A');
+      }
+      showAgentPanel('A', 'searching');
       break;
+    }
 
-    case 'done':
+    case 'phase': {
+      const agent = event.agent || 'A';
+      const phase = event.phase || 'generating';
+      showAgentPanel(agent, phase);
+      if (agent === 'C' && isActive && !lastSynthDivider) {
+        appendSynthesisDivider();
+        lastSynthDivider = true;
+        updateProgress(currentRound, maxRounds, 'C');
+      }
+      break;
+    }
+
+    case 'message': {
+      if (event.message) {
+        session.messages.push(event.message);
+        const role = event.message.role;
+
+        if (role === 'A' || role === 'B' || role === 'C') agentMsgCount++;
+
+        if (isActive) {
+          appendMessage(event.message);
+
+          if (role === 'A') {
+            updateProgress(currentRound, maxRounds, 'A');
+            showAgentPanel('B', 'searching');
+          } else if (role === 'B') {
+            updateProgress(currentRound, maxRounds, 'B');
+            if (currentRound < maxRounds) {
+              // next round_start will come from backend
+            } else {
+              showAgentPanel('C', 'synthesizing');
+            }
+          } else if (role === 'C') {
+            updateProgress(currentRound, maxRounds, 'C');
+            hideAgentPanel();
+          }
+        }
+      }
+      break;
+    }
+
+    case 'stopped': {
+      // Agent B requested early stop → next is synthesis
+      showAgentPanel('C', 'synthesizing');
+      break;
+    }
+
+    case 'done': {
+      // Use final messages array as source of truth
       if (event.messages) {
         session.messages = event.messages;
       }
-      hideTyping();
-      updateProgress(currentMaxRounds, currentMaxRounds, 'C');
+      hideAgentPanel();
+      if (isActive) {
+        updateProgress(currentRound, maxRounds, 'C');
+      }
       break;
-
-    default:
-      break;
-  }
-
-  // Render if this is the active session
-  if (sid === activeSessionId) {
-    renderMessages(session.messages);
+    }
   }
 }
 
-// ===== Streaming Fetch (Bug-fixed) =====
+// ======================================================================
+//  Streaming fetch  (bug-fixed)
+// ======================================================================
 async function startStream(payload, targetSessionId) {
   abortController = new AbortController();
-
   const res = await fetch('/api/run/stream', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify(payload),
     cache: 'no-store',
     signal: abortController.signal,
   });
-
   if (!res.ok) {
     const errText = await res.text().catch(() => 'Unknown error');
     throw new Error(`HTTP ${res.status}: ${errText}`);
   }
-
-  if (!res.body) {
-    throw new Error('Response body is not readable');
-  }
+  if (!res.body) throw new Error('Response body is not readable');
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder('utf-8');
@@ -552,62 +627,39 @@ async function startStream(payload, targetSessionId) {
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-
-      // BUG FIX: Use stream: true to handle multi-byte UTF-8 chars split across chunks
       buffer += decoder.decode(value, { stream: true });
-
-      // Normalize all line endings to \n
       buffer = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-      // SSE events are separated by double newlines
       let sep = buffer.indexOf('\n\n');
       while (sep !== -1) {
         const raw = buffer.slice(0, sep);
         buffer = buffer.slice(sep + 2);
-
-        if (raw.trim()) {
-          processSSEChunk(raw, targetSessionId);
-        }
-
+        if (raw.trim()) processSSEChunk(raw, targetSessionId);
         sep = buffer.indexOf('\n\n');
       }
     }
-
-    // BUG FIX: Flush remaining decoder bytes
     const remaining = decoder.decode();
-    if (remaining) {
-      buffer += remaining;
-    }
-
-    // Process any remaining buffered data
-    if (buffer.trim()) {
-      processSSEChunk(buffer, targetSessionId);
-    }
+    if (remaining) buffer += remaining;
+    if (buffer.trim()) processSSEChunk(buffer, targetSessionId);
   } finally {
     reader.releaseLock();
   }
 }
 
-// ===== Stop Button =====
+// ======================================================================
+//  Event listeners
+// ======================================================================
 stopBtn.addEventListener('click', () => {
-  if (abortController) {
-    abortController.abort();
-    abortController = null;
-  }
+  if (abortController) { abortController.abort(); abortController = null; }
 });
 
-// ===== Start Button =====
 startBtn.addEventListener('click', async () => {
   if (isRunning) return;
-  if (!activeSessionId) {
-    activeSessionId = createSession();
-    refreshSessionOptions();
-  }
+  if (!activeSessionId) { activeSessionId = createSession(); refreshSessionOptions(); }
 
   const topic = document.getElementById('topic').value.trim();
   const timeContext = document.getElementById('timeContext').value.trim();
   const prGoal = document.getElementById('prGoal').value.trim();
-
   if (!topic) return alert('Please enter an event topic');
   if (!timeContext) return alert('Please enter time context');
   if (!prGoal) return alert('Please enter a PR goal');
@@ -620,33 +672,27 @@ startBtn.addEventListener('click', async () => {
   session.name = topic.slice(0, 24) || session.name;
   refreshSessionOptions();
 
-  currentMaxRounds = Number(document.getElementById('maxRounds').value) || 3;
+  maxRounds = Number(document.getElementById('maxRounds').value) || 3;
   currentRound = 0;
-  messageCount = 0;
+  agentMsgCount = 0;
+  lastSynthDivider = false;
 
   const payload = {
-    session_id: sid,
-    topic,
-    time_context: timeContext,
-    pr_goal: prGoal,
-    max_rounds: currentMaxRounds,
-    agentA_config: cfg('a'),
-    agentB_config: cfg('b'),
-    agentC_config: cfg('c'),
+    session_id: sid, topic, time_context: timeContext, pr_goal: prGoal,
+    max_rounds: maxRounds,
+    agentA_config: cfg('a'), agentB_config: cfg('b'), agentC_config: cfg('c'),
     tavily_api_key: document.getElementById('tavilyKey').value,
     search_topk: Number(document.getElementById('searchTopk').value),
-    search_domains: document
-      .getElementById('searchDomains')
-      .value.split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    search_domains: document.getElementById('searchDomains').value.split(',').map(s => s.trim()).filter(Boolean),
   };
 
   try {
     setRunning(true);
     session.messages = [];
-    renderMessages([]);
-    showTyping('A');
+    messagesArea.innerHTML = '';
+    renderedCount = 0;
+    updateMsgCount();
+    showAgentPanel('A', 'searching');
     await startStream(payload, sid);
     setStatus('done', 'Analysis complete');
     progressFill.style.width = '100%';
@@ -660,12 +706,10 @@ startBtn.addEventListener('click', async () => {
     }
   } finally {
     setRunning(false);
-    // Keep progress visible after completion
     progressWrap.classList.add('active');
   }
 });
 
-// ===== New Session =====
 newSessionBtn.addEventListener('click', () => {
   if (isRunning) return;
   const id = createSession();
@@ -673,30 +717,27 @@ newSessionBtn.addEventListener('click', () => {
   switchSession(id);
 });
 
-// ===== Clear Session =====
 clearSessionBtn.addEventListener('click', () => {
   if (isRunning || !activeSessionId) return;
   const session = sessions.get(activeSessionId);
   if (!session) return;
-  session.topic = '';
-  session.time_context = '';
-  session.pr_goal = '';
-  session.messages = [];
+  session.topic = ''; session.time_context = ''; session.pr_goal = ''; session.messages = [];
   document.getElementById('topic').value = '';
   document.getElementById('timeContext').value = '';
   document.getElementById('prGoal').value = '';
-  renderMessages([]);
+  fullRender([]);
   progressWrap.classList.remove('active');
   setStatus('idle', 'Session cleared');
 });
 
-// ===== Session Select =====
-sessionSelect.addEventListener('change', (e) => {
+sessionSelect.addEventListener('change', e => {
   if (isRunning) return;
   switchSession(e.target.value);
 });
 
-// ===== Initialize =====
+// ======================================================================
+//  Initialize
+// ======================================================================
 const initId = createSession();
 refreshSessionOptions();
 switchSession(initId);
