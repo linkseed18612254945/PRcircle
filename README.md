@@ -44,7 +44,7 @@ Backend Service (FastAPI)
 - **双 Agent 协同推理**：分析 + 质询，提升方案严谨性。
 - **灵活输出**：A/B 可输出自然语言或 JSON；若响应可解析为 JSON，会在 `structured` 字段中展示。
 - **检索增强**：通过 Tavily 引入外部信息与反例线索。
-- **共享情报池**：每轮由Agent先基于当前问答与已有情报“规划高质量检索词”（包含方向+理解+验证意图），再检索并将去重结果沉淀到会话级共享池。
+- **共享情报池**：每轮由Agent先基于当前问答与已有情报“规划高质量检索词”（方向+理解+验证意图），规划结果会先去重再执行检索，并将新证据沉淀到会话级共享池。
 - **容错策略**：Tavily 失败时返回空结果，不中断主流程。
 - **OpenAI-compatible**：可对接兼容 `/chat/completions` 的任意模型网关。
 - **轻量前端**：开箱可用，支持话题输入、模型参数与 Agent 能力提示配置（格式/逻辑提示内置于后端）。
@@ -84,7 +84,8 @@ Backend Service (FastAPI)
 - `generate(state)` 抽象方法
 - `call_llm(messages)` 统一 LLM 调用
 - `maybe_call_search(query, topk)` 统一检索入口
-- `_plan_search_queries(...)` 基于问答上下文动态规划关键检索词
+- `_plan_search_queries(...)` 基于问答上下文动态规划关键检索词（支持结构化规划与兜底策略）
+- `_select_intel_for_prompt(...)` 从共享池按当前轮相关性筛选证据用于提示
 
 #### AnalysisAgent（A）
 

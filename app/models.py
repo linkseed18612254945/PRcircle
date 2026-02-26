@@ -50,6 +50,8 @@ class DialogueState(BaseModel):
     messages: list[dict[str, Any]] = Field(default_factory=list)
     intel_pool: list[RetrievalResult] = Field(default_factory=list)
     intel_ids: set[str] = Field(default_factory=set)
+    searched_queries: list[str] = Field(default_factory=list)
+    searched_query_fingerprints: set[str] = Field(default_factory=set)
 
     def add_intel(self, retrievals: list[RetrievalResult]) -> list[RetrievalResult]:
         newly_added: list[RetrievalResult] = []
@@ -60,6 +62,20 @@ class DialogueState(BaseModel):
             self.intel_pool.append(item)
             newly_added.append(item)
         return newly_added
+
+    def add_queries(self, queries: list[str]) -> list[str]:
+        new_queries: list[str] = []
+        for query in queries:
+            q = query.strip()
+            if not q:
+                continue
+            fingerprint = " ".join(q.lower().split())
+            if fingerprint in self.searched_query_fingerprints:
+                continue
+            self.searched_query_fingerprints.add(fingerprint)
+            self.searched_queries.append(q)
+            new_queries.append(q)
+        return new_queries
 
 
 class RunRequest(BaseModel):
