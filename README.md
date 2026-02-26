@@ -46,7 +46,7 @@ Backend Service (FastAPI)
 - **检索增强**：通过 Tavily 引入外部信息与反例线索。
 - **容错策略**：Tavily 失败时返回空结果，不中断主流程。
 - **OpenAI-compatible**：可对接兼容 `/chat/completions` 的任意模型网关。
-- **轻量前端**：开箱可用，支持话题输入、模型参数与 Agent Prompt 配置。
+- **轻量前端**：开箱可用，支持话题输入、模型参数与 Agent 能力提示配置（格式/逻辑提示内置于后端）。
 
 ---
 
@@ -223,7 +223,7 @@ call_llm(messages, config) -> str
     "api_key": "<YOUR_KEY>",
     "temperature": 0.7,
     "max_tokens": 800,
-    "system_prompt": "你是分析者（Agent A）。请给出有条理分析，可自然语言输出。"
+    "capability_prompt": "偏向给出可执行步骤、风险与验证方案。"
   },
   "agentB_config": {
     "model_name": "gpt-4o-mini",
@@ -231,7 +231,7 @@ call_llm(messages, config) -> str
     "api_key": "<YOUR_KEY>",
     "temperature": 0.7,
     "max_tokens": 800,
-    "system_prompt": "你是质询者（Agent B）。请给出关键批评与测试建议，可自然语言输出。"
+    "capability_prompt": "偏向挑战假设、提出反例与可复现实验。"
   },
   "tavily_api_key": "<TAVILY_KEY>",
   "search_topk": 5
@@ -278,8 +278,8 @@ call_llm(messages, config) -> str
    - 流式展示消息，支持查看 structured（若存在）与检索来源
 
 2. **Settings**
-   - Agent A 模型配置 + System Prompt
-   - Agent B 模型配置 + System Prompt
+   - Agent A 模型配置 + capability_prompt（能力偏好）
+   - Agent B 模型配置 + capability_prompt（能力偏好）
    - Tavily API Key 与默认 topk
 
 3. **多会话能力**
@@ -327,7 +327,7 @@ curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
       "api_key": "YOUR_OPENAI_KEY",
       "temperature": 0.7,
       "max_tokens": 600,
-      "system_prompt": "你是分析者（Agent A）。请给出有条理分析，可自然语言输出。"
+      "capability_prompt": "偏向给出可执行步骤、风险与验证方案。"
     },
     "agentB_config": {
       "model_name": "gpt-4o-mini",
@@ -335,7 +335,7 @@ curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
       "api_key": "YOUR_OPENAI_KEY",
       "temperature": 0.7,
       "max_tokens": 600,
-      "system_prompt": "你是质询者（Agent B）。请给出关键批评与测试建议，可自然语言输出。"
+      "capability_prompt": "偏向挑战假设、提出反例与可复现实验。"
     },
     "tavily_api_key": "YOUR_TAVILY_KEY",
     "search_topk": 5
@@ -348,7 +348,7 @@ curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
 
 - **Tavily 请求失败**：捕获异常并返回 `[]`，不会中断 A/B 推理流程。
 - **模型输出非 JSON**：这是默认支持路径；仅在可解析 JSON 时填充 `structured`。
-- **结构约束不足**：对 A/B 的关键字段存在兜底逻辑（例如最少批评条数）。
+- **流式中断**：前端会在请求失败时提示错误；可重试当前会话。
 
 ---
 

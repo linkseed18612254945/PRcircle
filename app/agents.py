@@ -16,6 +16,7 @@ class BaseAgent(ABC):
         role: Literal["analysis", "challenge"],
         llm_config: LLMConfig,
         system_prompt: str,
+        capability_prompt: str,
         search_tool: TavilySearchTool,
         search_topk: int,
     ):
@@ -23,6 +24,7 @@ class BaseAgent(ABC):
         self.role = role
         self.llm_config = llm_config
         self.system_prompt = system_prompt
+        self.capability_prompt = capability_prompt
         self.search_tool = search_tool
         self.search_topk = search_topk
 
@@ -45,13 +47,14 @@ class BaseAgent(ABC):
         except json.JSONDecodeError:
             return {}
 
+    def _build_system_prompt(self) -> str:
+        return f"{self.system_prompt}\n\n能力偏好：\n{self.capability_prompt or '无'}"
+
 
 class AnalysisAgent(BaseAgent):
     async def generate(self, state: DialogueState) -> AgentMessage:
         prior_critic = next((m for m in reversed(state.messages) if m.get("role") == "B"), None)
-        required_mutations = []
-        if prior_critic:
-            required_mutations = prior_critic.get("structured", {}).get("required_mutations", [])
+        prior_questions = prior_critic.get("content", "") if prior_critic else "无"
 
         retrievals = await self.maybe_call_search(state.topic)
         retrieval_digest = "\n".join(
@@ -61,13 +64,13 @@ class AnalysisAgent(BaseAgent):
         user_prompt = (
             f"话题: {state.topic}\n"
             f"当前轮次: {state.turn_index}\n"
-            f"上一轮要求变异: {required_mutations or ['无']}\n"
+            f"Agent B 上一轮内容（请先回答其中的问题）:\n{prior_questions}\n"
             f"检索摘要:\n{retrieval_digest or '无'}\n"
-            "请给出清晰分析，可使用自然语言或 JSON 结构。"
+            "请先逐条回答B的问题，再更新你的分析结论。"
         )
         response = await self.call_llm(
             [
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": self._build_system_prompt()},
                 {"role": "user", "content": user_prompt},
             ]
         )
@@ -92,11 +95,11 @@ class ChallengeAgent(BaseAgent):
             f"话题: {state.topic}\n"
             f"分析者最新输出:\n{a_reference}\n"
             f"检索反例:\n{retrieval_digest or '无'}\n"
-            "请提出关键批评、必须修正项、测试建议与追问。可使用自然语言或 JSON。"
+            "请提出关键批评、明确问题（至少1个）和测试建议。"
         )
         response = await self.call_llm(
             [
-                {"role": "system", "content": self.system_prompt},
+                {"role": "system", "content": self._build_system_prompt()},
                 {"role": "user", "content": user_prompt},
             ]
         )

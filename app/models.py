@@ -15,7 +15,7 @@ class LLMConfig(BaseModel):
 
 
 class AgentConfig(LLMConfig):
-    system_prompt: str
+    capability_prompt: str = ""
 
 
 class RetrievalResult(BaseModel):

@@ -11,19 +11,8 @@ let isRunning = false;
 
 function createSession(name = null) {
   const id = crypto.randomUUID();
-  sessions.set(id, {
-    id,
-    name: name || `会话 ${sessions.size + 1}`,
-    topic: '',
-    messages: [],
-  });
+  sessions.set(id, { id, name: name || `会话 ${sessions.size + 1}`, topic: '', messages: [] });
   return id;
-}
-
-function ensureSession() {
-  if (!activeSessionId) {
-    activeSessionId = createSession();
-  }
 }
 
 function refreshSessionOptions() {
@@ -34,9 +23,7 @@ function refreshSessionOptions() {
     opt.textContent = `${session.name} (${session.id.slice(0, 8)})`;
     sessionSelect.appendChild(opt);
   });
-  if (activeSessionId) {
-    sessionSelect.value = activeSessionId;
-  }
+  if (activeSessionId) sessionSelect.value = activeSessionId;
 }
 
 function switchSession(id) {
@@ -63,7 +50,7 @@ function cfg(prefix) {
     api_key: document.getElementById(`${prefix}_key`).value,
     temperature: Number(document.getElementById(`${prefix}_temp`).value),
     max_tokens: Number(document.getElementById(`${prefix}_max`).value),
-    system_prompt: document.getElementById(`${prefix}_prompt`).value,
+    capability_prompt: document.getElementById(`${prefix}_capability`).value,
   };
 }
 
@@ -78,7 +65,7 @@ function renderMessages(messages) {
 
     if (m.structured && Object.keys(m.structured).length > 0) {
       const d = document.createElement('details');
-      d.innerHTML = `<summary>structured JSON(若模型返回可解析 JSON)</summary><pre>${JSON.stringify(m.structured, null, 2)}</pre>`;
+      d.innerHTML = `<summary>structured JSON（可解析时显示）</summary><pre>${JSON.stringify(m.structured, null, 2)}</pre>`;
       card.appendChild(d);
     }
 
@@ -88,7 +75,6 @@ function renderMessages(messages) {
       list.innerHTML = '<strong>检索来源</strong><br/>' + m.retrievals.map(r => `• <a href="${r.url}" target="_blank">${r.title || r.url}</a>`).join('<br/>');
       card.appendChild(list);
     }
-
     el.appendChild(card);
   });
 }
@@ -100,18 +86,16 @@ function setRunning(running) {
   document.getElementById('maxRounds').disabled = running;
   sessionSelect.disabled = running;
   newSessionBtn.disabled = running;
-  runStatus.textContent = running ? '运行中...（当前会话禁止重复提交）' : '运行结束';
+  runStatus.textContent = running ? '运行中...（禁止重复提交）' : '运行结束';
 }
 
-async function startStream(payload) {
+async function startStream(payload, targetSessionId) {
   const res = await fetch('/api/run/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
-  if (!res.ok || !res.body) {
-    throw new Error(await res.text());
-  }
+  if (!res.ok || !res.body) throw new Error(await res.text());
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder('utf-8');
@@ -122,16 +106,19 @@ async function startStream(payload) {
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
 
-    const events = buffer.split('\n\n');
-    buffer = events.pop() || '';
+    let sep = buffer.indexOf('\n\n');
+    while (sep !== -1) {
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      sep = buffer.indexOf('\n\n');
 
-    events.forEach((chunk) => {
-      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-      if (!line) return;
-      const payloadText = line.slice(6);
-      const event = JSON.parse(payloadText);
-      const session = sessions.get(activeSessionId);
-      if (!session) return;
+      const dataLines = raw.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6));
+      if (!dataLines.length) continue;
+
+      const event = JSON.parse(dataLines.join('\n'));
+      const sid = event.session_id || targetSessionId;
+      const session = sessions.get(sid);
+      if (!session) continue;
 
       if (event.type === 'session_started' && event.message) {
         session.messages = [event.message];
@@ -140,28 +127,27 @@ async function startStream(payload) {
       } else if (event.type === 'done' && event.messages) {
         session.messages = event.messages;
       }
-      renderMessages(session.messages);
-    });
+
+      if (sid === activeSessionId) renderMessages(session.messages);
+    }
   }
 }
 
 startBtn.addEventListener('click', async () => {
-  ensureSession();
   if (isRunning) return;
+  if (!activeSessionId) activeSessionId = createSession();
 
   const topic = document.getElementById('topic').value.trim();
-  if (!topic) {
-    alert('请输入 topic');
-    return;
-  }
+  if (!topic) return alert('请输入 topic');
 
-  const session = sessions.get(activeSessionId);
+  const sid = activeSessionId;
+  const session = sessions.get(sid);
   session.topic = topic;
   session.name = topic.slice(0, 20) || session.name;
   refreshSessionOptions();
 
   const payload = {
-    session_id: activeSessionId,
+    session_id: sid,
     topic,
     max_rounds: Number(document.getElementById('maxRounds').value),
     agentA_config: cfg('a'),
@@ -174,10 +160,10 @@ startBtn.addEventListener('click', async () => {
     setRunning(true);
     session.messages = [];
     renderMessages([]);
-    await startStream(payload);
+    await startStream(payload, sid);
   } catch (err) {
-    alert(`请求失败: ${err}`);
     runStatus.textContent = '运行失败';
+    alert(`请求失败: ${err}`);
   } finally {
     setRunning(false);
   }

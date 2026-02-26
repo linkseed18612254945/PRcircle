@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from .agents import AnalysisAgent, ChallengeAgent
 from .dialogue_engine import DialogueEngine
 from .models import RunRequest, RunResponse
-from .prompts import DEFAULT_ANALYSIS_SYSTEM_PROMPT, DEFAULT_CHALLENGE_SYSTEM_PROMPT
+from .prompts import ANALYSIS_LOGIC_PROMPT, CHALLENGE_LOGIC_PROMPT
 from .search_tool import TavilySearchTool
 
 app = FastAPI(title="Multi-Agent Analysis MVP")
@@ -31,7 +31,8 @@ def build_engine(req: RunRequest) -> DialogueEngine:
         agent_id="A",
         role="analysis",
         llm_config=req.agentA_config,
-        system_prompt=req.agentA_config.system_prompt or DEFAULT_ANALYSIS_SYSTEM_PROMPT,
+        system_prompt=ANALYSIS_LOGIC_PROMPT,
+        capability_prompt=req.agentA_config.capability_prompt,
         search_tool=search_tool,
         search_topk=req.search_topk,
     )
@@ -39,7 +40,8 @@ def build_engine(req: RunRequest) -> DialogueEngine:
         agent_id="B",
         role="challenge",
         llm_config=req.agentB_config,
-        system_prompt=req.agentB_config.system_prompt or DEFAULT_CHALLENGE_SYSTEM_PROMPT,
+        system_prompt=CHALLENGE_LOGIC_PROMPT,
+        capability_prompt=req.agentB_config.capability_prompt,
         search_tool=search_tool,
         search_topk=req.search_topk,
     )
@@ -62,7 +64,11 @@ async def run_dialogue_stream(req: RunRequest) -> StreamingResponse:
         async for event in engine.run_stream(state):
             yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
 
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
