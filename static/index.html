@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Multi-Agent Analysis MVP</title>
+    <style>
+      :root { --bg:#f5f7fb; --card:#fff; --text:#0f172a; --sub:#475569; --pri:#2563eb; --pri2:#1d4ed8; --line:#e2e8f0; }
+      *{box-sizing:border-box} body{font-family:Inter,Arial,sans-serif;margin:0;background:linear-gradient(180deg,#eef2ff 0%,var(--bg) 35%);color:var(--text)}
+      .shell{max-width:1100px;margin:24px auto;padding:0 16px}
+      .tabs{display:flex;gap:8px;background:#0f172a;padding:8px;border-radius:12px}
+      .tab{padding:10px 14px;border-radius:8px;color:#cbd5e1;cursor:pointer} .tab.active{background:#1e293b;color:#fff}
+      .page{display:none;margin-top:16px}.page.active{display:block}
+      .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 4px 16px rgba(15,23,42,.04)}
+      .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+      input,textarea,select{padding:10px;border:1px solid #cbd5e1;border-radius:10px;min-width:180px}
+      textarea{resize:vertical}
+      button{padding:10px 16px;border:none;background:var(--pri);color:#fff;border-radius:10px;cursor:pointer;font-weight:600}
+      button:hover{background:var(--pri2)} button:disabled{background:#94a3b8;cursor:not-allowed}
+      .msg{padding:12px;border-radius:10px;margin:8px 0;line-height:1.6;border:1px solid transparent}
+      .A{background:#eff6ff;border-color:#bfdbfe}.B{background:#fff1f2;border-color:#fecdd3}.user{background:#f1f5f9;border-color:#cbd5e1}
+      .retrieval{font-size:12px;color:#334155;margin-top:8px}.muted{color:var(--sub);font-size:13px}
+      .title{margin:0 0 8px 0}
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="tabs">
+        <div class="tab active" data-target="chatPage">Chat</div>
+        <div class="tab" data-target="settingsPage">Settings</div>
+      </div>
+
+      <div id="chatPage" class="page active">
+        <div class="card">
+          <h3 class="title">分析会话</h3>
+          <div class="row">
+            <select id="sessionSelect" style="min-width:280px"></select>
+            <button id="newSessionBtn" type="button">+ New Session</button>
+          </div>
+          <div class="row">
+            <input id="topic" placeholder="输入分析话题" style="flex: 1; min-width: 380px;" />
+            <input id="maxRounds" type="number" value="3" min="1" max="8" />
+            <button id="startBtn" type="button">Start</button>
+          </div>
+          <div id="runStatus" class="muted">未运行</div>
+        </div>
+
+        <div class="card">
+          <h3 class="title">对话过程（流式）</h3>
+          <div id="messages"></div>
+        </div>
+      </div>
+
+      <div id="settingsPage" class="page">
+        <div class="card">
+          <h3 class="title">Agent A 配置</h3>
+          <div class="row"><input id="a_model" value="gpt-4o-mini" placeholder="model_name" /><input id="a_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+          <div class="row"><input id="a_key" placeholder="api_key" /><input id="a_temp" value="0.7" /><input id="a_max" value="800" /></div>
+          <div class="row"><textarea id="a_capability" placeholder="Agent A能力偏好提示词（可配置）" style="width:100%;min-height:90px;">偏向给出可执行步骤、风险与验证方案。</textarea></div>
+        </div>
+        <div class="card">
+          <h3 class="title">Agent B 配置</h3>
+          <div class="row"><input id="b_model" value="gpt-4o-mini" placeholder="model_name" /><input id="b_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+          <div class="row"><input id="b_key" placeholder="api_key" /><input id="b_temp" value="0.7" /><input id="b_max" value="800" /></div>
+          <div class="row"><textarea id="b_capability" placeholder="Agent B能力偏好提示词（可配置）" style="width:100%;min-height:90px;">偏向挑战假设、提出反例与可复现实验。</textarea></div>
+        </div>
+        <div class="card">
+          <h3 class="title">Tavily 配置</h3>
+          <div class="row"><input id="tavilyKey" placeholder="tavily_api_key" /><input id="searchTopk" type="number" value="5" /></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/main.js"></script>
+  </body>
+</html>
