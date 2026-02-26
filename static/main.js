@@ -146,6 +146,12 @@ function renderMessages(messages) {
       q.innerHTML = '<strong>检索词</strong><br/>' + m.search_queries.map(x => `• ${x}`).join('<br/>');
       card.appendChild(q);
     }
+    if (m.citation_sources?.length) {
+      const cite = document.createElement('div');
+      cite.className = 'retrieval';
+      cite.innerHTML = '<strong>引用目录</strong><br/>' + m.citation_sources.map((r, idx) => `[R${idx + 1}] <a href="${r.url}" target="_blank">${r.title || r.url}</a>`).join('<br/>');
+      card.appendChild(cite);
+    }
     if (m.retrievals?.length) {
       const list = document.createElement('div');
       list.className = 'retrieval';

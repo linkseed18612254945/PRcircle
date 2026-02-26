@@ -31,6 +31,7 @@ class AgentMessage(BaseModel):
     content: str
     structured: dict[str, Any] = Field(default_factory=dict)
     retrievals: list[RetrievalResult] = Field(default_factory=list)
+    citation_sources: list[RetrievalResult] = Field(default_factory=list)
     search_queries: list[str] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 

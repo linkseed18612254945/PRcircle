@@ -84,6 +84,15 @@ class BaseAgent(ABC):
         ranked = sorted(state.intel_pool, key=score, reverse=True)
         return ranked[:topn]
 
+
+    def _format_citation_catalog(self, sources: list[RetrievalResult]) -> str:
+        if not sources:
+            return "无"
+        lines = []
+        for idx, src in enumerate(sources, start=1):
+            lines.append(f"[R{idx}] {src.title} | {src.url}")
+        return "\n".join(lines)
+
     async def _plan_search_queries(
         self,
         state: DialogueState,
@@ -168,6 +177,7 @@ class AnalysisAgent(BaseAgent):
             f"本轮检索词（思考结果）:\n- " + "\n- ".join(search_queries) + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"
             f"当前相关证据（从共享池按相关性筛选）:\n{retrieval_digest or '无'}\n"
+            f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
             "请在回答中明确：你使用了哪些证据、哪些仍需验证。"
         )
         response = await self.call_llm(
@@ -181,6 +191,7 @@ class AnalysisAgent(BaseAgent):
             content=response,
             structured=self._try_extract_json(response),
             retrievals=new_intel,
+            citation_sources=focus_intel,
             search_queries=search_queries,
         )
 
@@ -214,6 +225,7 @@ class ChallengeAgent(BaseAgent):
             f"本轮检索词（思考结果）:\n- " + "\n- ".join(search_queries) + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"
             f"当前相关证据（从共享池按相关性筛选）:\n{retrieval_digest or '无'}\n"
+            f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
             "请基于证据提出关键批评、明确问题（至少1个）和测试建议。"
         )
         response = await self.call_llm(
@@ -227,5 +239,6 @@ class ChallengeAgent(BaseAgent):
             content=response,
             structured=self._try_extract_json(response),
             retrievals=new_intel,
+            citation_sources=focus_intel,
             search_queries=search_queries,
         )

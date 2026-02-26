@@ -256,6 +256,7 @@ call_llm(messages, config) -> str
       "content": "{...}",
       "structured": {"...": "仅当模型输出可解析 JSON 时出现"},
       "retrievals": [...],
+      "citation_sources": [{"id":"...","title":"..."}],
       "search_queries": ["...", "...", "..."],
       "timestamp": "..."
     },
@@ -264,6 +265,7 @@ call_llm(messages, config) -> str
       "content": "{...}",
       "structured": {"...": "仅当模型输出可解析 JSON 时出现"},
       "retrievals": [...],
+      "citation_sources": [{"id":"...","title":"..."}],
       "search_queries": ["...", "...", "..."],
       "timestamp": "..."
     }
