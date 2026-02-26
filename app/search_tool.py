@@ -12,7 +12,7 @@ class TavilySearchTool:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-    async def search(self, query: str, topk: int) -> list[RetrievalResult]:
+    async def search(self, query: str, topk: int, include_domains: list[str] | None = None) -> list[RetrievalResult]:
         url = "https://api.tavily.com/search"
         payload: dict[str, Any] = {
             "api_key": self.api_key,
@@ -20,6 +20,9 @@ class TavilySearchTool:
             "max_results": topk,
             "include_answer": False,
         }
+        domains = [d.strip() for d in (include_domains or []) if d.strip()]
+        if domains:
+            payload["include_domains"] = domains
         try:
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(url, json=payload)

@@ -240,7 +240,8 @@ call_llm(messages, config) -> str
     "capability_prompt": "偏向挑战假设、提出反例与可复现实验。"
   },
   "tavily_api_key": "<TAVILY_KEY>",
-  "search_topk": 5
+  "search_topk": 5,
+  "search_domains": ["reddit.com", "ptt.cc"]
 }
 ```
 
@@ -351,7 +352,8 @@ curl -N -X POST 'http://127.0.0.1:8000/api/run/stream' \
       "capability_prompt": "偏向挑战假设、提出反例与可复现实验。"
     },
     "tavily_api_key": "YOUR_TAVILY_KEY",
-    "search_topk": 5
+    "search_topk": 5,
+    "search_domains": ["reddit.com", "ptt.cc"]
   }'
 ```
 

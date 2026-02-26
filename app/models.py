@@ -26,6 +26,11 @@ class RetrievalResult(BaseModel):
     score: float = 0.0
 
 
+class SearchDirective(BaseModel):
+    query: str
+    domains: list[str] = Field(default_factory=list)
+
+
 class AgentMessage(BaseModel):
     role: Literal["A", "B"]
     content: str
@@ -33,6 +38,7 @@ class AgentMessage(BaseModel):
     retrievals: list[RetrievalResult] = Field(default_factory=list)
     citation_sources: list[RetrievalResult] = Field(default_factory=list)
     search_queries: list[str] = Field(default_factory=list)
+    search_directives: list[SearchDirective] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -91,6 +97,7 @@ class RunRequest(BaseModel):
     agentB_config: AgentConfig
     tavily_api_key: str
     search_topk: int = 5
+    search_domains: list[str] = Field(default_factory=list)
 
 
 class RunResponse(BaseModel):

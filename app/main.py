@@ -35,6 +35,7 @@ def build_engine(req: RunRequest) -> DialogueEngine:
         capability_prompt=req.agentA_config.capability_prompt,
         search_tool=search_tool,
         search_topk=req.search_topk,
+        default_search_domains=req.search_domains,
     )
     agent_b = ChallengeAgent(
         agent_id="B",
@@ -44,6 +45,7 @@ def build_engine(req: RunRequest) -> DialogueEngine:
         capability_prompt=req.agentB_config.capability_prompt,
         search_tool=search_tool,
         search_topk=req.search_topk,
+        default_search_domains=req.search_domains,
     )
     return DialogueEngine(analysis_agent=agent_a, challenge_agent=agent_b)
 

@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Literal
 
 from .llm_client import call_llm
-from .models import AgentMessage, DialogueState, LLMConfig, RetrievalResult
+from .models import AgentMessage, DialogueState, LLMConfig, RetrievalResult, SearchDirective
 from .search_tool import TavilySearchTool
 
 
@@ -20,6 +20,7 @@ class BaseAgent(ABC):
         capability_prompt: str,
         search_tool: TavilySearchTool,
         search_topk: int,
+        default_search_domains: list[str] | None = None,
     ):
         self.id = agent_id
         self.role = role
@@ -28,13 +29,23 @@ class BaseAgent(ABC):
         self.capability_prompt = capability_prompt
         self.search_tool = search_tool
         self.search_topk = search_topk
+        self.default_search_domains = [d.strip() for d in (default_search_domains or []) if d.strip()]
 
     @abstractmethod
     async def generate(self, state: DialogueState) -> AgentMessage:
         raise NotImplementedError
 
-    async def maybe_call_search(self, query: str, topk: int | None = None) -> list[RetrievalResult]:
-        return await self.search_tool.search(query=query, topk=topk or self.search_topk)
+    async def maybe_call_search(
+        self,
+        query: str,
+        topk: int | None = None,
+        domains: list[str] | None = None,
+    ) -> list[RetrievalResult]:
+        return await self.search_tool.search(
+            query=query,
+            topk=topk or self.search_topk,
+            include_domains=domains or self.default_search_domains,
+        )
 
     async def call_llm(self, messages: list[dict[str, str]]) -> str:
         return await call_llm(messages=messages, config=self.llm_config)
@@ -92,12 +103,12 @@ class BaseAgent(ABC):
             return "无"
         return "\n".join([f"[R{idx}] {src.title} | {src.url}" for idx, src in enumerate(sources, start=1)])
 
-    def _keep_specific_queries(self, queries: list[str], max_count: int = 4) -> list[str]:
+    def _keep_specific_directives(self, directives: list[SearchDirective], max_count: int = 4) -> list[SearchDirective]:
         abstract = {"策略", "风险", "舆情", "传播", "问题", "事件", "影响", "机制", "分析", "方向"}
-        kept: list[str] = []
+        kept: list[SearchDirective] = []
         seen: set[str] = set()
-        for query in queries:
-            q = query.strip()
+        for directive in directives:
+            q = directive.query.strip()
             if not q:
                 continue
             norm = self._normalize_query(q)
@@ -108,7 +119,8 @@ class BaseAgent(ABC):
             if len(specific_tokens) < 2:
                 continue
             seen.add(norm)
-            kept.append(q)
+            domains = [d.strip() for d in (directive.domains or []) if d.strip()]
+            kept.append(SearchDirective(query=q, domains=domains))
             if len(kept) >= max_count:
                 break
         return kept
@@ -118,7 +130,7 @@ class BaseAgent(ABC):
         state: DialogueState,
         counterpart_message: str,
         own_last_message: str,
-    ) -> list[str]:
+    ) -> list[SearchDirective]:
         planner_prompt = (
             f"你是{self.role}检索规划器。\n"
             f"话题: {state.topic}\n"
@@ -134,13 +146,15 @@ class BaseAgent(ABC):
             "步骤3【组合结构】：按“对象词 + 时间或场景 + 冲突点/争议点 + 证据类型”拼接。\n"
             "步骤4【发散隐藏变量】：至少1条加入隐藏变量，如利益相关方、二阶影响、执行约束。\n"
             "步骤5【去同质化】：4条词必须角度不同，不能只是同义改写。\n"
+            "步骤6【站点范围】：按需要为每条词附加1-3个站点域名（如 reddit.com, ptt.cc, weibo.com），没有必要可留空。\n"
             "输出要求：\n"
-            "- 每条都必须是可直接搜索的完整短句；\n"
+            '- 每条都必须是对象：{"query":"...","domains":["..."]}；\n'
+            "- query必须是可直接搜索的完整短句；\n"
             "- 避免抽象空词（如：策略、风险、舆情分析）；\n"
             "- 尽量使用具体名词和可验证线索词（通报/判例/数据截图/时间线/原始信源）。"
         )
 
-        planned: list[str] = []
+        planned: list[SearchDirective] = []
         try:
             raw = await self.call_llm(
                 [
@@ -152,33 +166,47 @@ class BaseAgent(ABC):
             if isinstance(parsed, list):
                 for item in parsed:
                     if isinstance(item, str):
-                        planned.append(item.strip())
+                        planned.append(SearchDirective(query=item.strip(), domains=[]))
                     elif isinstance(item, dict):
-                        planned.append(str(item.get("query", "")).strip())
+                        query = str(item.get("query", "")).strip()
+                        domains = item.get("domains") or []
+                        if not isinstance(domains, list):
+                            domains = []
+                        planned.append(
+                            SearchDirective(
+                                query=query,
+                                domains=[str(d).strip() for d in domains if str(d).strip()],
+                            )
+                        )
         except Exception:
             pass
 
-        queries = self._keep_specific_queries(planned, max_count=4)
-        if not queries:
+        directives = self._keep_specific_directives(planned, max_count=4)
+        if not directives:
             seed_terms = self._extract_keywords(
                 f"{state.topic} {state.time_context} {state.pr_goal} {counterpart_message} {own_last_message}",
                 maxn=6,
             )
             seed_a = seed_terms[0] if len(seed_terms) > 0 else "涉事机构"
             seed_b = seed_terms[1] if len(seed_terms) > 1 else "核心平台"
-            queries = [
-                f"{state.topic} {seed_a} 时间线 关键节点 原始信源",
-                f"{state.topic} {seed_b} 话题标签 扩散路径 数据截图",
-                f"{state.topic} {state.pr_goal} 监管口径 政策条款 公开通报",
-                f"{state.topic} {seed_a} 隐性关联方 二阶影响 反向案例",
+            fallback_domains = self.default_search_domains[:2]
+            directives = [
+                SearchDirective(query=f"{state.topic} {seed_a} 时间线 关键节点 原始信源", domains=fallback_domains),
+                SearchDirective(query=f"{state.topic} {seed_b} 话题标签 扩散路径 数据截图", domains=fallback_domains),
+                SearchDirective(query=f"{state.topic} {state.pr_goal} 监管口径 政策条款 公开通报", domains=[]),
+                SearchDirective(query=f"{state.topic} {seed_a} 隐性关联方 二阶影响 反向案例", domains=[]),
             ]
-            queries = self._keep_specific_queries(queries, max_count=4)
+            directives = self._keep_specific_directives(directives, max_count=4)
 
-        deduped = state.add_queries(queries)
-        if deduped:
-            return deduped[:4]
+        deduped_queries = state.add_queries([d.query for d in directives])
+        if deduped_queries:
+            deduped_set = set(deduped_queries)
+            return [d for d in directives if d.query in deduped_set][:4]
 
-        return [f"{q} round{state.turn_index}" for q in queries[:4]]
+        return [
+            SearchDirective(query=f"{d.query} round{state.turn_index}", domains=d.domains)
+            for d in directives[:4]
+        ]
 
 
 class AnalysisAgent(BaseAgent):
@@ -188,15 +216,15 @@ class AnalysisAgent(BaseAgent):
         own_last = next((m for m in reversed(state.messages) if m.get("role") == "A"), None)
         own_last_content = own_last.get("content", "") if own_last else ""
 
-        search_queries = await self._plan_search_queries(
+        search_directives = await self._plan_search_queries(
             state=state,
             counterpart_message=prior_questions,
             own_last_message=own_last_content,
         )
 
         merged_results: list[RetrievalResult] = []
-        for query in search_queries:
-            merged_results.extend(await self.maybe_call_search(query))
+        for directive in search_directives:
+            merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains))
 
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, prior_questions)
@@ -208,7 +236,11 @@ class AnalysisAgent(BaseAgent):
             f"PR目标: {state.pr_goal or '未提供'}\n"
             f"当前轮次: {state.turn_index}\n"
             f"Agent B 上一轮内容（请先回答其中的问题）:\n{prior_questions}\n"
-            f"本轮检索词（具体关键词）:\n- " + "\n- ".join(search_queries) + "\n"
+            f"本轮检索词（具体关键词）:\n- "
+            + "\n- ".join(
+                [f"{d.query} | sites={','.join(d.domains) if d.domains else 'all'}" for d in search_directives]
+            )
+            + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"
             f"当前相关证据（从共享池按相关性筛选）:\n{retrieval_digest or '无'}\n"
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
@@ -226,7 +258,8 @@ class AnalysisAgent(BaseAgent):
             structured=self._try_extract_json(response),
             retrievals=new_intel,
             citation_sources=focus_intel,
-            search_queries=search_queries,
+            search_queries=[d.query for d in search_directives],
+            search_directives=search_directives,
         )
 
 
@@ -237,15 +270,15 @@ class ChallengeAgent(BaseAgent):
         own_last = next((m for m in reversed(state.messages) if m.get("role") == "B"), None)
         own_last_content = own_last.get("content", "") if own_last else ""
 
-        search_queries = await self._plan_search_queries(
+        search_directives = await self._plan_search_queries(
             state=state,
             counterpart_message=a_reference,
             own_last_message=own_last_content,
         )
 
         merged_results: list[RetrievalResult] = []
-        for query in search_queries:
-            merged_results.extend(await self.maybe_call_search(query))
+        for directive in search_directives:
+            merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains))
 
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, a_reference)
@@ -256,7 +289,11 @@ class ChallengeAgent(BaseAgent):
             f"时间背景: {state.time_context or '未提供'}\n"
             f"PR目标: {state.pr_goal or '未提供'}\n"
             f"分析者最新输出:\n{a_reference}\n"
-            f"本轮检索词（具体关键词）:\n- " + "\n- ".join(search_queries) + "\n"
+            f"本轮检索词（具体关键词）:\n- "
+            + "\n- ".join(
+                [f"{d.query} | sites={','.join(d.domains) if d.domains else 'all'}" for d in search_directives]
+            )
+            + "\n"
             f"本轮新增检索情报数: {len(new_intel)}\n"
             f"当前相关证据（从共享池按相关性筛选）:\n{retrieval_digest or '无'}\n"
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
@@ -274,5 +311,6 @@ class ChallengeAgent(BaseAgent):
             structured=self._try_extract_json(response),
             retrievals=new_intel,
             citation_sources=focus_intel,
-            search_queries=search_queries,
+            search_queries=[d.query for d in search_directives],
+            search_directives=search_directives,
         )

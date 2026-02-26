@@ -142,7 +142,14 @@ function renderMessages(messages) {
       card.appendChild(d);
     }
 
-    if (m.search_queries?.length) {
+    if (m.search_directives?.length) {
+      const q = document.createElement('div');
+      q.className = 'retrieval';
+      q.innerHTML = '<strong>检索词与站点范围</strong><br/>' + m.search_directives
+        .map(d => `• ${d.query}${d.domains?.length ? ` <span class="muted">[sites: ${d.domains.join(', ')}]</span>` : ''}`)
+        .join('<br/>');
+      card.appendChild(q);
+    } else if (m.search_queries?.length) {
       const q = document.createElement('div');
       q.className = 'retrieval';
       q.innerHTML = '<strong>检索词</strong><br/>' + m.search_queries.map(x => `• ${x}`).join('<br/>');
@@ -273,6 +280,7 @@ startBtn.addEventListener('click', async () => {
     agentB_config: cfg('b'),
     tavily_api_key: document.getElementById('tavilyKey').value,
     search_topk: Number(document.getElementById('searchTopk').value),
+    search_domains: document.getElementById('searchDomains').value.split(',').map(s => s.trim()).filter(Boolean),
   };
 
   try {
