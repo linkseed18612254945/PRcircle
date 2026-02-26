@@ -2,6 +2,7 @@ const tabs = document.querySelectorAll('.tab');
 const pages = document.querySelectorAll('.page');
 const startBtn = document.getElementById('startBtn');
 const newSessionBtn = document.getElementById('newSessionBtn');
+const clearSessionBtn = document.getElementById('clearSessionBtn');
 const sessionSelect = document.getElementById('sessionSelect');
 const runStatus = document.getElementById('runStatus');
 
@@ -69,7 +70,6 @@ function renderMessages(messages) {
       card.appendChild(d);
     }
 
-
     if (m.search_queries?.length) {
       const q = document.createElement('div');
       q.className = 'retrieval';
@@ -89,6 +89,7 @@ function renderMessages(messages) {
 function setRunning(running) {
   isRunning = running;
   startBtn.disabled = running;
+  clearSessionBtn.disabled = running;
   document.getElementById('topic').disabled = running;
   document.getElementById('maxRounds').disabled = running;
   sessionSelect.disabled = running;
@@ -96,11 +97,45 @@ function setRunning(running) {
   runStatus.textContent = running ? '运行中...（禁止重复提交）' : '运行结束';
 }
 
+function processSSEChunk(rawChunk, targetSessionId) {
+  const normalized = rawChunk.replaceAll('\r', '');
+  const dataLines = normalized
+    .split('\n')
+    .filter((l) => l.startsWith('data:'))
+    .map((l) => l.slice(5).trimStart());
+
+  if (!dataLines.length) return;
+
+  let event;
+  try {
+    event = JSON.parse(dataLines.join('\n'));
+  } catch {
+    return;
+  }
+
+  const sid = event.session_id || targetSessionId;
+  const session = sessions.get(sid);
+  if (!session) return;
+
+  if (event.type === 'session_started' && event.message) {
+    session.messages = [event.message];
+  } else if (event.type === 'message' && event.message) {
+    session.messages.push(event.message);
+  } else if (event.type === 'done' && event.messages) {
+    session.messages = event.messages;
+  }
+
+  if (sid === activeSessionId) {
+    renderMessages(session.messages);
+  }
+}
+
 async function startStream(payload, targetSessionId) {
   const res = await fetch('/api/run/stream', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify(payload),
+    cache: 'no-store',
   });
   if (!res.ok || !res.body) throw new Error(await res.text());
 
@@ -111,32 +146,21 @@ async function startStream(payload, targetSessionId) {
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
+
     buffer += decoder.decode(value, { stream: true });
+    buffer = buffer.replaceAll('\r\n', '\n');
 
     let sep = buffer.indexOf('\n\n');
     while (sep !== -1) {
       const raw = buffer.slice(0, sep);
       buffer = buffer.slice(sep + 2);
+      processSSEChunk(raw, targetSessionId);
       sep = buffer.indexOf('\n\n');
-
-      const dataLines = raw.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6));
-      if (!dataLines.length) continue;
-
-      const event = JSON.parse(dataLines.join('\n'));
-      const sid = event.session_id || targetSessionId;
-      const session = sessions.get(sid);
-      if (!session) continue;
-
-      if (event.type === 'session_started' && event.message) {
-        session.messages = [event.message];
-      } else if (event.type === 'message' && event.message) {
-        session.messages.push(event.message);
-      } else if (event.type === 'done' && event.messages) {
-        session.messages = event.messages;
-      }
-
-      if (sid === activeSessionId) renderMessages(session.messages);
     }
+  }
+
+  if (buffer.trim()) {
+    processSSEChunk(buffer, targetSessionId);
   }
 }
 
@@ -181,6 +205,17 @@ newSessionBtn.addEventListener('click', () => {
   const id = createSession();
   refreshSessionOptions();
   switchSession(id);
+});
+
+clearSessionBtn.addEventListener('click', () => {
+  if (isRunning || !activeSessionId) return;
+  const session = sessions.get(activeSessionId);
+  if (!session) return;
+  session.topic = '';
+  session.messages = [];
+  document.getElementById('topic').value = '';
+  renderMessages([]);
+  runStatus.textContent = '已清理当前会话并重置状态';
 });
 
 sessionSelect.addEventListener('change', (e) => {
