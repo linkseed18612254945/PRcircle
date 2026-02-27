@@ -1,5 +1,5 @@
 /* ============================================================
-   PRcircle – Frontend (v3 – complete streaming rewrite)
+   PRcircle – Frontend (v4 – Claude Code inspired dark theme)
 
    Architecture:
    ┌─────────────────────────────────────────────────────────┐
@@ -17,11 +17,11 @@
       on `message` event
    3. ROBUST SSE PARSING – handles chunked delivery,
       multi-byte UTF-8, and malformed frames gracefully
+   4. COLLAPSIBLE TOOL BLOCKS – search/retrieval shown as
+      expandable sections (Claude Code style)
    ============================================================ */
 
 // ─── DOM refs ────────────────────────────────────────────────
-const tabs             = document.querySelectorAll('.nav-tab');
-const pages            = document.querySelectorAll('.page');
 const startBtn         = document.getElementById('startBtn');
 const stopBtn          = document.getElementById('stopBtn');
 const newSessionBtn    = document.getElementById('newSessionBtn');
@@ -40,6 +40,16 @@ const agentPanelPhase  = document.getElementById('agentPanelPhase');
 const messagesArea     = document.getElementById('messages');
 const msgCountEl       = document.getElementById('msgCount');
 
+// Settings drawer
+const settingsToggle  = document.getElementById('settingsToggle');
+const settingsDrawer  = document.getElementById('settingsDrawer');
+const settingsOverlay = document.getElementById('settingsOverlay');
+const settingsClose   = document.getElementById('settingsClose');
+
+// Topic panel
+const topicPanel      = document.getElementById('topicPanel');
+const topicToggle     = document.getElementById('topicToggle');
+
 // ─── App state ───────────────────────────────────────────────
 const sessions      = new Map();
 let activeSessionId = null;
@@ -50,10 +60,10 @@ let currentRound    = 0;
 let synthDivAdded   = false;
 
 // ─── Streaming card state (one agent streams at a time) ──────
-let streamNode      = null;   // DOM node of the in-progress card
-let streamTextEl    = null;   // <div class="stream-text"> inside it
-let streamAgent     = null;   // 'A' | 'B' | 'C'
-let streamBuffer    = '';     // accumulated raw text
+let streamNode      = null;
+let streamTextEl    = null;
+let streamAgent     = null;
+let streamBuffer    = '';
 
 // ─── Constants ───────────────────────────────────────────────
 const ROLE_LABEL = {
@@ -68,10 +78,37 @@ const PHASE_LABEL = {
   synthesizing: 'Synthesizing final report…',
 };
 const AGENT_COLOR = {
-  A: 'var(--a-color)',
-  B: 'var(--b-color)',
-  C: 'var(--c-color)',
+  A: 'var(--agent-a)',
+  B: 'var(--agent-b)',
+  C: 'var(--agent-c)',
 };
+
+// ─────────────────────────────────────────────────────────────
+//  Settings drawer
+// ─────────────────────────────────────────────────────────────
+function openSettings() {
+  settingsDrawer.classList.add('open');
+  settingsOverlay.classList.add('open');
+  settingsToggle.classList.add('active');
+}
+function closeSettings() {
+  settingsDrawer.classList.remove('open');
+  settingsOverlay.classList.remove('open');
+  settingsToggle.classList.remove('active');
+}
+settingsToggle.addEventListener('click', () => {
+  settingsDrawer.classList.contains('open') ? closeSettings() : openSettings();
+});
+settingsOverlay.addEventListener('click', closeSettings);
+settingsClose.addEventListener('click', closeSettings);
+
+// ─────────────────────────────────────────────────────────────
+//  Topic panel toggle
+// ─────────────────────────────────────────────────────────────
+topicToggle.addEventListener('click', () => {
+  topicPanel.classList.toggle('collapsed');
+  topicToggle.classList.toggle('active');
+});
 
 // ─────────────────────────────────────────────────────────────
 //  Session management
@@ -87,7 +124,7 @@ function refreshSessionOptions() {
   sessions.forEach(s => {
     const o = document.createElement('option');
     o.value = s.id;
-    o.textContent = `${s.name} (${s.id.slice(0, 8)})`;
+    o.textContent = `${s.name} (${s.id.slice(0, 6)})`;
     sessionSelect.appendChild(o);
   });
   if (activeSessionId) sessionSelect.value = activeSessionId;
@@ -104,18 +141,6 @@ function switchSession(id) {
   fullRender(s.messages);
   if (!isRunning) setStatus('idle', 'Ready');
 }
-
-// ─────────────────────────────────────────────────────────────
-//  Tab navigation
-// ─────────────────────────────────────────────────────────────
-tabs.forEach(tab => {
-  tab.addEventListener('click', () => {
-    tabs.forEach(t => t.classList.remove('active'));
-    pages.forEach(p => p.classList.remove('active'));
-    tab.classList.add('active');
-    document.getElementById(tab.dataset.target).classList.add('active');
-  });
-});
 
 // ─────────────────────────────────────────────────────────────
 //  Config extraction
@@ -191,17 +216,51 @@ function extractDomain(url) {
 }
 
 // ─────────────────────────────────────────────────────────────
+//  SVG icons (inline, small)
+// ─────────────────────────────────────────────────────────────
+const ICONS = {
+  search: '<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/><line x1="10.5" y1="10.5" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+  source: '<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M2 4l6-2 6 2v8l-6 2-6-2z" stroke="currentColor" stroke-width="1.4" fill="none"/></svg>',
+  cite: '<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.4"/><line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="5" y1="9" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+  json: '<svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M5 2C3.5 2 3 3 3 4v2c0 1-1 1.5-1.5 2C2 8.5 3 9 3 10v2c0 1 .5 2 2 2M11 2c1.5 0 2 1 2 2v2c0 1 1 1.5 1.5 2-.5.5-1.5 1-1.5 2v2c0 1-.5 2-2 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>',
+  chevron: '<svg class="tool-block-chevron" width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+// ─────────────────────────────────────────────────────────────
 //  DOM builders
 // ─────────────────────────────────────────────────────────────
 
-/** Build a retrieval mini-card */
-function buildRetrievalCard(r, idx, isCite) {
-  const card = document.createElement('div');
-  card.className = 'retrieval-card';
+/** Build a collapsible tool block */
+function buildToolBlock(iconType, label, count, contentBuilder) {
+  const block = document.createElement('div');
+  block.className = 'tool-block';
+
+  const header = document.createElement('div');
+  header.className = 'tool-block-header';
+  header.innerHTML = `
+    <div class="tool-block-icon ${iconType}">${ICONS[iconType]}</div>
+    <span class="tool-block-label">${esc(label)}</span>
+    <span class="tool-block-count">${count}</span>
+    ${ICONS.chevron}`;
+  header.addEventListener('click', () => block.classList.toggle('open'));
+
+  const body = document.createElement('div');
+  body.className = 'tool-block-body';
+  contentBuilder(body);
+
+  block.appendChild(header);
+  block.appendChild(body);
+  return block;
+}
+
+/** Build a retrieval item */
+function buildRetrievalItem(r, idx, isCite) {
+  const item = document.createElement('div');
+  item.className = 'retrieval-item';
+
   const badge = document.createElement('div');
-  badge.className = 'retrieval-idx';
+  badge.className = 'retrieval-idx' + (isCite ? ' cite' : '');
   badge.textContent = isCite ? `R${idx}` : String(idx);
-  if (isCite) badge.style.background = '#8b5cf6';
 
   const body = document.createElement('div');
   body.className = 'retrieval-body';
@@ -225,15 +284,17 @@ function buildRetrievalCard(r, idx, isCite) {
     snip.textContent = r.content.slice(0, 220);
     body.appendChild(snip);
   }
-  card.appendChild(badge);
-  card.appendChild(body);
+
+  item.appendChild(badge);
+  item.appendChild(body);
+
   if (r.score > 0) {
     const sc = document.createElement('div');
     sc.className = 'retrieval-score';
     sc.textContent = r.score.toFixed(2);
-    card.appendChild(sc);
+    item.appendChild(sc);
   }
-  return card;
+  return item;
 }
 
 /** Build complete (fully rendered) message card */
@@ -242,7 +303,7 @@ function buildMessageNode(m) {
   el.className = `msg ${m.role}`;
   el.dataset.role = m.role;
 
-  // header
+  // Header
   const hdr = document.createElement('div');
   hdr.className = 'msg-header';
   const subtitleParts = [];
@@ -258,13 +319,14 @@ function buildMessageNode(m) {
     <span class="msg-time">${fmtTime(m.timestamp)}</span>`;
   el.appendChild(hdr);
 
-  // markdown body
+  // Markdown body
   const body = document.createElement('div');
   body.className = 'markdown-body';
   const content = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
   body.innerHTML = mdToHtml(content);
   el.appendChild(body);
 
+  // Tool blocks (collapsible)
   const hasDir  = m.search_directives?.length > 0;
   const hasQ    = m.search_queries?.length > 0;
   const hasCite = m.citation_sources?.length > 0;
@@ -272,96 +334,74 @@ function buildMessageNode(m) {
   const hasJson = m.structured && Object.keys(m.structured).length > 0;
 
   if (hasDir || hasQ || hasCite || hasRet || hasJson) {
-    const meta = document.createElement('div');
-    meta.className = 'meta-sections';
+    const tools = document.createElement('div');
+    tools.className = 'tool-blocks';
 
-    // search directives
+    // Search directives
     if (hasDir) {
-      const sec = document.createElement('div');
-      sec.innerHTML = `<div class="meta-header">
-        <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Search Directives <span class="meta-count">${m.search_directives.length}</span></div>`;
-      const pills = document.createElement('div');
-      pills.className = 'search-directives';
-      m.search_directives.forEach(d => {
-        const pill = document.createElement('span');
-        pill.className = 'search-pill';
-        pill.title = d.query;
-        pill.innerHTML = `<span class="search-pill-icon">
-          <svg viewBox="0 0 16 16" style="width:9px;height:9px;fill:#fff"><circle cx="7" cy="7" r="5" fill="none" stroke="#fff" stroke-width="2"/><line x1="11" y1="11" x2="15" y2="15" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-        </span><span class="search-pill-text">${esc(d.query)}</span>`;
-        (d.domains || []).forEach(dm => {
-          const t = document.createElement('span');
-          t.className = 'search-pill-domain';
-          t.textContent = dm;
-          pill.appendChild(t);
+      tools.appendChild(buildToolBlock('search', 'Search Directives', m.search_directives.length, (body) => {
+        const pills = document.createElement('div');
+        pills.className = 'search-pills';
+        m.search_directives.forEach(d => {
+          const pill = document.createElement('span');
+          pill.className = 'search-pill';
+          pill.title = d.query;
+          pill.innerHTML = `<span class="search-pill-dot"></span><span class="search-pill-text">${esc(d.query)}</span>`;
+          pills.appendChild(pill);
         });
-        pills.appendChild(pill);
-      });
-      sec.appendChild(pills);
-      meta.appendChild(sec);
+        body.appendChild(pills);
+      }));
     } else if (hasQ) {
-      const sec = document.createElement('div');
-      sec.innerHTML = `<div class="meta-header">
-        <svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Search Queries <span class="meta-count">${m.search_queries.length}</span></div>`;
-      const pills = document.createElement('div');
-      pills.className = 'search-directives';
-      m.search_queries.forEach(q => {
-        const p = document.createElement('span');
-        p.className = 'search-pill';
-        p.textContent = q;
-        pills.appendChild(p);
-      });
-      sec.appendChild(pills);
-      meta.appendChild(sec);
+      tools.appendChild(buildToolBlock('search', 'Search Queries', m.search_queries.length, (body) => {
+        const pills = document.createElement('div');
+        pills.className = 'search-pills';
+        m.search_queries.forEach(q => {
+          const pill = document.createElement('span');
+          pill.className = 'search-pill';
+          pill.innerHTML = `<span class="search-pill-dot"></span><span class="search-pill-text">${esc(q)}</span>`;
+          pills.appendChild(pill);
+        });
+        body.appendChild(pills);
+      }));
     }
 
-    // citations
+    // Citations
     if (hasCite) {
-      const sec = document.createElement('div');
-      sec.innerHTML = `<div class="meta-header">
-        <svg viewBox="0 0 16 16"><rect x="2" y="2" width="12" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="5" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><line x1="5" y1="9" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-        Citations <span class="meta-count">${m.citation_sources.length}</span></div>`;
-      const grid = document.createElement('div');
-      grid.className = 'retrieval-grid';
-      m.citation_sources.forEach((r, i) => grid.appendChild(buildRetrievalCard(r, i + 1, true)));
-      sec.appendChild(grid);
-      meta.appendChild(sec);
+      tools.appendChild(buildToolBlock('cite', 'Citations', m.citation_sources.length, (body) => {
+        const list = document.createElement('div');
+        list.className = 'retrieval-list';
+        m.citation_sources.forEach((r, i) => list.appendChild(buildRetrievalItem(r, i + 1, true)));
+        body.appendChild(list);
+      }));
     }
 
-    // retrievals
+    // Retrievals
     if (hasRet) {
-      const sec = document.createElement('div');
-      sec.innerHTML = `<div class="meta-header">
-        <svg viewBox="0 0 16 16"><path d="M2 4l6-2 6 2v8l-6 2-6-2z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
-        Retrieved Sources <span class="meta-count">${m.retrievals.length}</span></div>`;
-      const grid = document.createElement('div');
-      grid.className = 'retrieval-grid';
-      m.retrievals.forEach((r, i) => grid.appendChild(buildRetrievalCard(r, i + 1, false)));
-      sec.appendChild(grid);
-      meta.appendChild(sec);
+      tools.appendChild(buildToolBlock('source', 'Retrieved Sources', m.retrievals.length, (body) => {
+        const list = document.createElement('div');
+        list.className = 'retrieval-list';
+        m.retrievals.forEach((r, i) => list.appendChild(buildRetrievalItem(r, i + 1, false)));
+        body.appendChild(list);
+      }));
     }
 
-    // structured JSON
+    // Structured JSON
     if (hasJson) {
-      const det = document.createElement('details');
-      const sum = document.createElement('summary');
-      sum.textContent = 'Structured JSON';
-      det.appendChild(sum);
-      const pre = document.createElement('pre');
-      pre.textContent = JSON.stringify(m.structured, null, 2);
-      det.appendChild(pre);
-      meta.appendChild(det);
+      tools.appendChild(buildToolBlock('json', 'Structured JSON', '', (body) => {
+        const pre = document.createElement('pre');
+        pre.className = 'json-pre';
+        pre.textContent = JSON.stringify(m.structured, null, 2);
+        body.appendChild(pre);
+      }));
     }
 
-    el.appendChild(meta);
+    el.appendChild(tools);
   }
 
   return el;
 }
 
-/** Build the streaming placeholder card (header + raw text + cursor) */
+/** Build the streaming placeholder card */
 function buildStreamCard(role) {
   const el = document.createElement('div');
   el.className = `msg ${role} msg-streaming`;
@@ -372,7 +412,7 @@ function buildStreamCard(role) {
   hdr.innerHTML = `
     <div class="msg-avatar">${role}</div>
     <div class="msg-info">
-      <div class="msg-role" style="color:${AGENT_COLOR[role]}">${ROLE_LABEL[role]}</div>
+      <div class="msg-role">${ROLE_LABEL[role]}</div>
       <div class="msg-subtitle"><span class="stream-badge">Generating…</span></div>
     </div>`;
   el.appendChild(hdr);
@@ -392,18 +432,18 @@ function buildStreamCard(role) {
 function buildRoundDivider(round, maxR) {
   const d = document.createElement('div');
   d.className = 'round-divider';
-  d.innerHTML = `<div class="round-divider-line"></div>
-    <div class="round-badge"><span class="round-badge-dot"></span> ROUND ${round} / ${maxR}</div>
-    <div class="round-divider-line"></div>`;
+  d.innerHTML = `<div class="round-line"></div>
+    <div class="round-badge"><span class="round-dot"></span> ROUND ${round} / ${maxR}</div>
+    <div class="round-line"></div>`;
   return d;
 }
 
 function buildSynthesisDivider() {
   const d = document.createElement('div');
   d.className = 'round-divider';
-  d.innerHTML = `<div class="round-divider-line"></div>
-    <div class="round-badge synthesis"><span class="round-badge-dot"></span> FINAL SYNTHESIS</div>
-    <div class="round-divider-line"></div>`;
+  d.innerHTML = `<div class="round-line"></div>
+    <div class="round-badge synthesis"><span class="round-dot"></span> FINAL SYNTHESIS</div>
+    <div class="round-line"></div>`;
   return d;
 }
 
@@ -412,10 +452,19 @@ function buildSynthesisDivider() {
 // ─────────────────────────────────────────────────────────────
 function showEmptyState() {
   if (!document.getElementById('emptyState')) {
-    messagesArea.innerHTML = `<div class="msg-empty" id="emptyState">
-      <div class="msg-empty-icon">&#9672;</div>
-      <div class="msg-empty-text">No messages yet.<br/>Configure your topic and click <strong>Start Analysis</strong> to begin.</div>
-    </div>`;
+    const es = document.createElement('div');
+    es.className = 'empty-state';
+    es.id = 'emptyState';
+    es.innerHTML = `
+      <div class="empty-logo">PR</div>
+      <div class="empty-title">Multi-Agent PR Strategy Analysis</div>
+      <div class="empty-desc">Configure your topic above and start a multi-perspective analysis session.</div>
+      <div class="empty-agents">
+        <div class="empty-agent"><div class="empty-agent-dot" style="background:var(--agent-a)"></div> Agent A — Analyst · Proposes solutions</div>
+        <div class="empty-agent"><div class="empty-agent-dot" style="background:var(--agent-b)"></div> Agent B — Challenger · Critiques proposals</div>
+        <div class="empty-agent"><div class="empty-agent-dot" style="background:var(--agent-c)"></div> Agent C — Observer · Synthesizes report</div>
+      </div>`;
+    messagesArea.appendChild(es);
   }
 }
 
@@ -461,7 +510,7 @@ function scrollToBottom() {
 
 function updateMsgCount(n) {
   const count = (n !== undefined) ? n : (sessions.get(activeSessionId)?.messages?.length ?? 0);
-  msgCountEl.textContent = count ? `${count} message${count !== 1 ? 's' : ''}` : '';
+  msgCountEl.textContent = count ? `${count} msg${count !== 1 ? 's' : ''}` : '';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -474,12 +523,9 @@ function _clearStreamState() {
   streamBuffer = '';
 }
 
-/** Start or continue streaming text for `role` */
 function streamToken(role, token) {
   if (streamAgent !== role || !streamNode) {
-    // Finalize previous streaming card if different agent
     _finalizeCurrentStreamCard();
-
     streamAgent  = role;
     streamBuffer = '';
     streamNode   = buildStreamCard(role);
@@ -492,17 +538,11 @@ function streamToken(role, token) {
   scrollToBottom();
 }
 
-/**
- * Replace the streaming card with a fully-rendered message card.
- * Called when `message` event arrives for the current streaming agent.
- */
 function finalizeStreamCard(m) {
   const finalCard = buildMessageNode(m);
-
   if (streamNode && streamNode.parentNode && streamAgent === m.role) {
     messagesArea.replaceChild(finalCard, streamNode);
   } else {
-    // No streaming card – just append (fallback for non-streaming LLM)
     hideEmptyState();
     messagesArea.appendChild(finalCard);
   }
@@ -512,7 +552,6 @@ function finalizeStreamCard(m) {
 
 function _finalizeCurrentStreamCard() {
   if (streamNode && streamNode.parentNode) {
-    // Streaming card without a message event – remove cursor to indicate done
     const cursor = streamNode.querySelector('.stream-cursor');
     if (cursor) cursor.remove();
   }
@@ -531,7 +570,7 @@ function setStatus(state, text) {
 }
 
 function showAgentPanel(agent, phase) {
-  const color = AGENT_COLOR[agent] || 'var(--pri)';
+  const color = AGENT_COLOR[agent] || 'var(--accent)';
   agentPanelAvatar.textContent        = agent;
   agentPanelAvatar.style.background   = color;
   agentPanelName.textContent          = ROLE_LABEL[agent] || agent;
@@ -607,7 +646,6 @@ function dispatchSSEEvent(event, targetSessionId) {
     case 'phase': {
       const { agent, phase } = event;
       showAgentPanel(agent, phase);
-
       if (isActive) {
         const total = maxRounds * 2 + 1;
         if (agent === 'A' && phase === 'generating') {
@@ -623,7 +661,6 @@ function dispatchSSEEvent(event, targetSessionId) {
       if (isActive) {
         streamToken(event.agent, event.content);
       } else {
-        // For non-active sessions just buffer (no DOM work)
         if (streamAgent !== event.agent) {
           streamAgent  = event.agent;
           streamBuffer = '';
@@ -640,7 +677,6 @@ function dispatchSSEEvent(event, targetSessionId) {
         if (isActive) {
           finalizeStreamCard(event.message);
           updateMsgCount();
-
           const total = maxRounds * 2 + 1;
           if (role === 'A') {
             updateProgress((currentRound - 1) * 2 + 1, total, `Round ${currentRound} / ${maxRounds} · Agent A done`);
@@ -652,7 +688,6 @@ function dispatchSSEEvent(event, targetSessionId) {
             hideAgentPanel();
           }
         }
-        // For non-active sessions, clear pending stream buffer
         if (!isActive) {
           streamBuffer = '';
           streamAgent  = null;
@@ -668,7 +703,6 @@ function dispatchSSEEvent(event, targetSessionId) {
     }
 
     case 'done': {
-      // Authoritative final state from server
       if (event.messages) session.messages = event.messages;
       if (isActive) {
         _finalizeCurrentStreamCard();
@@ -683,20 +717,16 @@ function dispatchSSEEvent(event, targetSessionId) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  SSE chunk parser  (handles chunked delivery robustly)
+//  SSE chunk parser
 // ─────────────────────────────────────────────────────────────
 function parseSSEChunk(rawChunk, targetSessionId) {
-  // Normalise line endings
   const norm = rawChunk.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-
-  // Skip SSE comment lines (our keepalive padding starts with ':')
   const dataLines = norm.split('\n')
     .filter(l => l.startsWith('data:'))
     .map(l => l.slice(5).trimStart());
 
   if (!dataLines.length) return;
 
-  // Try the joined string first (single JSON payload, most common case)
   let event = null;
   try { event = JSON.parse(dataLines.join('')); } catch { /* try individual */ }
 
@@ -739,11 +769,9 @@ async function startStream(payload, targetSessionId) {
       const { value, done } = await reader.read();
       if (done) break;
 
-      // stream:true handles multi-byte chars split across network chunks
       buffer += decoder.decode(value, { stream: true });
       buffer  = buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-      // Process complete SSE events (terminated by \n\n)
       let sep = buffer.indexOf('\n\n');
       while (sep !== -1) {
         const raw = buffer.slice(0, sep);
@@ -753,7 +781,6 @@ async function startStream(payload, targetSessionId) {
       }
     }
 
-    // Flush decoder
     const tail = decoder.decode();
     if (tail) buffer += tail;
     if (buffer.trim()) parseSSEChunk(buffer, targetSessionId);
@@ -836,6 +863,10 @@ startBtn.addEventListener('click', async () => {
 
   try {
     setRunning(true);
+    // Auto-collapse topic panel when running
+    topicPanel.classList.add('collapsed');
+    topicToggle.classList.add('active');
+
     session.messages = [];
     messagesArea.innerHTML = '';
     showEmptyState();
@@ -879,6 +910,11 @@ clearSessionBtn.addEventListener('click', () => {
 sessionSelect.addEventListener('change', e => {
   if (isRunning) return;
   switchSession(e.target.value);
+});
+
+// Keyboard shortcut: Escape closes settings
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeSettings();
 });
 
 // ─────────────────────────────────────────────────────────────
