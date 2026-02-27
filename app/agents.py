@@ -148,28 +148,26 @@ class BaseAgent(ABC):
         counterpart_message: str,
         own_last_message: str,
     ) -> list[SearchDirective]:
-        planner_prompt = (
-            f"你是{self.role}检索规划器。\n"
-            f"话题: {state.topic}\n"
-            f"时间背景: {state.time_context or '未提供'}\n"
-            f"PR目标: {state.pr_goal or '未提供'}\n"
-            f"当前轮次: {state.turn_index}\n"
-            f"对方最新观点/问题: {counterpart_message[:600] or '无'}\n"
-            f"我方上一轮结论: {own_last_message[:600] or '无'}\n"
-            f"共享情报池摘要:\n{self._intel_digest(state)}\n\n"
-            "请按以下步骤构建检索词，再输出4条结果(JSON数组字符串)：\n"
-            "步骤1【提炼对象】：先从上下文中提炼具体对象词（人物/机构/平台/城市/政策名/话题标签）。\n"
-            "步骤2【锁定意图】：为每条词指定一个检索意图（事实核验/反例查找/传播链路/合规边界）。\n"
-            "步骤3【组合结构】：按"对象词 + 时间或场景 + 冲突点/争议点 + 证据类型"拼接。\n"
-            "步骤4【发散隐藏变量】：至少1条加入隐藏变量，如利益相关方、二阶影响、执行约束。\n"
-            "步骤5【去同质化】：4条词必须角度不同，不能只是同义改写。\n"
-            "步骤6【站点范围】：按需要为每条词附加1-3个站点域名（如 reddit.com, ptt.cc, weibo.com），没有必要可留空。\n"
-            "输出要求：\n"
-            '- 每条都必须是对象：{"query":"...","domains":["..."]}；\n'
-            "- query必须是可直接搜索的完整短句；\n"
-            "- 避免抽象空词（如：策略、风险、舆情分析）；\n"
-            "- 尽量使用具体名词和可验证线索词（通报/判例/数据截图/时间线/原始信源）。"
-        )
+        planner_prompt = f"""你是{self.role}检索规划器。
+            话题: {state.topic}\n
+            时间背景: {state.time_context or '未提供'}\n
+            PR目标: {state.pr_goal or '未提供'}\n"
+            当前轮次: {state.turn_index}\n"
+            对方最新观点/问题: {counterpart_message[:600] or '无'}\n
+            我方上一轮结论: {own_last_message[:600] or '无'}\n
+            共享情报池摘要:\n{self._intel_digest(state)}\n\n
+            请按以下步骤构建检索词，再输出4条结果(JSON数组字符串)：\n
+            步骤1【提炼对象】：先从上下文中提炼具体对象词（人物/机构/平台/城市/政策名/话题标签）。\n
+            步骤2【锁定意图】：为每条词指定一个检索意图（事实核验/反例查找/传播链路/合规边界）。\n
+            步骤3【组合结构】：按"对象词 + 时间或场景 + 冲突点/争议点 + 证据类型"拼接。\n
+            步骤4【发散隐藏变量】：至少1条加入隐藏变量，如利益相关方、二阶影响、执行约束。\n
+            步骤5【去同质化】：4条词必须角度不同，不能只是同义改写。\n"
+            步骤6【站点范围】：按需要为每条词附加1-3个站点域名（如 reddit.com, ptt.cc, weibo.com），没有必要可留空。\n
+            输出要求：\n
+            - 每条都必须是对象：{"query":"...","domains":["..."]}；\n
+            - query必须是可直接搜索的完整短句；\n
+            - 避免抽象空词（如：策略、风险、舆情分析）；\n
+            - 尽量使用具体名词和可验证线索词（通报/判例/数据截图/时间线/原始信源）。"""
 
         planned: list[SearchDirective] = []
         try:
