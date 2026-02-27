@@ -276,6 +276,52 @@
       .settings-card.tavily .settings-badge{background:var(--warn)}.settings-card.tavily .settings-card-title{color:#b45309}
 
       /* ==========================================
+         Streaming card
+         ========================================== */
+      .msg-streaming { animation: msgSlideIn .35s ease; }
+
+      /* Raw text during streaming – pre-wrap, no markdown */
+      .stream-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 13.5px;
+        color: var(--text);
+        line-height: 1.75;
+        min-height: 1.4em;
+      }
+
+      /* Blinking cursor appended after stream-text */
+      .stream-cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1.1em;
+        background: var(--pri);
+        margin-left: 2px;
+        vertical-align: text-bottom;
+        border-radius: 1px;
+        animation: blink 1s step-end infinite;
+      }
+      @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+      /* "Generating…" badge in streaming header */
+      .stream-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+        color: var(--pri);
+        font-weight: 600;
+      }
+      .stream-badge::before {
+        content: '';
+        display: inline-block;
+        width: 7px; height: 7px;
+        border-radius: 50%;
+        background: var(--pri);
+        animation: pulse 1.2s ease-in-out infinite;
+      }
+
+      /* ==========================================
          Responsive
          ========================================== */
       @media(max-width:768px){
