@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PRcircle - Multi-Agent Analysis</title>
     <style>
-      /* ===== CSS Variables ===== */
+      /* ==========================================
+         Design System Variables
+         ========================================== */
       :root {
         --bg: #f0f2f5;
+        --bg2: #e8eaef;
         --card: #ffffff;
         --text: #1a1a2e;
         --sub: #64748b;
@@ -15,558 +18,279 @@
         --pri: #6366f1;
         --pri-hover: #4f46e5;
         --pri-light: #eef2ff;
-        --pri-glow: rgba(99, 102, 241, 0.15);
+        --pri-glow: rgba(99,102,241,.15);
         --danger: #ef4444;
         --danger-hover: #dc2626;
         --success: #10b981;
+        --success-light: #d1fae5;
         --warn: #f59e0b;
+        --warn-light: #fef3c7;
         --line: #e2e8f0;
         --line-light: #f1f5f9;
         --radius: 16px;
         --radius-sm: 10px;
-        --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-        --shadow-md: 0 4px 20px rgba(0,0,0,0.06);
-        --shadow-lg: 0 10px 40px rgba(0,0,0,0.08);
-        --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-        /* Agent colors */
-        --agent-a: #6366f1;
-        --agent-a-bg: #eef2ff;
-        --agent-a-border: #c7d2fe;
-        --agent-b: #f43f5e;
-        --agent-b-bg: #fff1f2;
-        --agent-b-border: #fecdd3;
-        --agent-c: #06b6d4;
-        --agent-c-bg: #ecfeff;
-        --agent-c-border: #a5f3fc;
-        --agent-user-bg: #f8fafc;
-        --agent-user-border: #e2e8f0;
+        --radius-xs: 6px;
+        --shadow-sm: 0 1px 3px rgba(0,0,0,.06);
+        --shadow-md: 0 4px 20px rgba(0,0,0,.06);
+        --shadow-lg: 0 10px 40px rgba(0,0,0,.08);
+        --transition: .2s cubic-bezier(.4,0,.2,1);
+        /* Agent palette */
+        --a-color: #6366f1; --a-bg: #eef2ff; --a-border: #c7d2fe; --a-glow: rgba(99,102,241,.12);
+        --b-color: #f43f5e; --b-bg: #fff1f2; --b-border: #fecdd3; --b-glow: rgba(244,63,94,.12);
+        --c-color: #0891b2; --c-bg: #ecfeff; --c-border: #a5f3fc; --c-glow: rgba(8,145,178,.12);
+        --u-color: #64748b; --u-bg: #f8fafc; --u-border: #e2e8f0;
       }
 
-      /* ===== Base Reset ===== */
-      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-      html { scroll-behavior: smooth; }
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, 'Noto Sans SC', sans-serif;
-        background: var(--bg);
-        color: var(--text);
-        line-height: 1.6;
-        min-height: 100vh;
-      }
+      /* ==========================================
+         Reset & Base
+         ========================================== */
+      *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+      html{scroll-behavior:smooth}
+      body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,'Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;min-height:100vh}
 
-      /* ===== Header ===== */
-      .header {
-        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3730a3 100%);
-        padding: 20px 24px;
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        box-shadow: 0 4px 24px rgba(30, 27, 75, 0.25);
-      }
-      .header-inner {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-      }
-      .logo {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .logo-icon {
-        width: 40px; height: 40px;
-        background: rgba(255,255,255,0.15);
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 20px;
-        backdrop-filter: blur(8px);
-      }
-      .logo-text {
-        color: #fff;
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: -0.5px;
-      }
-      .logo-sub {
-        color: rgba(255,255,255,0.6);
-        font-size: 12px;
-        font-weight: 400;
-      }
+      /* ==========================================
+         Header
+         ========================================== */
+      .header{background:linear-gradient(135deg,#1e1b4b 0%,#312e81 50%,#3730a3 100%);padding:16px 24px;position:sticky;top:0;z-index:100;box-shadow:0 4px 24px rgba(30,27,75,.25)}
+      .header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between}
+      .logo{display:flex;align-items:center;gap:12px}
+      .logo-icon{width:38px;height:38px;background:rgba(255,255,255,.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;backdrop-filter:blur(8px);letter-spacing:-.5px}
+      .logo-text{color:#fff;font-size:19px;font-weight:700;letter-spacing:-.5px}
+      .logo-sub{color:rgba(255,255,255,.55);font-size:11px;font-weight:400}
+      .nav-tabs{display:flex;gap:4px;background:rgba(255,255,255,.1);padding:4px;border-radius:10px;backdrop-filter:blur(8px)}
+      .nav-tab{padding:7px 18px;border-radius:7px;color:rgba(255,255,255,.65);cursor:pointer;font-size:13px;font-weight:500;transition:var(--transition);user-select:none}
+      .nav-tab:hover{color:#fff;background:rgba(255,255,255,.08)}
+      .nav-tab.active{color:#fff;background:rgba(255,255,255,.18);box-shadow:0 2px 8px rgba(0,0,0,.15)}
 
-      /* ===== Tab Navigation ===== */
-      .nav-tabs {
-        display: flex;
-        gap: 4px;
-        background: rgba(255,255,255,0.1);
-        padding: 4px;
-        border-radius: 12px;
-        backdrop-filter: blur(8px);
-      }
-      .nav-tab {
-        padding: 8px 20px;
-        border-radius: 8px;
-        color: rgba(255,255,255,0.7);
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        transition: var(--transition);
-        user-select: none;
-      }
-      .nav-tab:hover { color: #fff; background: rgba(255,255,255,0.08); }
-      .nav-tab.active {
-        color: #fff;
-        background: rgba(255,255,255,0.18);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      }
+      /* ==========================================
+         Shell / Pages
+         ========================================== */
+      .shell{max-width:1200px;margin:0 auto;padding:20px 20px 60px}
+      .page{display:none;animation:fadeIn .3s ease}
+      .page.active{display:block}
+      @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 
-      /* ===== Shell Layout ===== */
-      .shell { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
-      .page { display: none; animation: fadeIn 0.3s ease; }
-      .page.active { display: block; }
-      @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      /* ==========================================
+         Card
+         ========================================== */
+      .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:20px 24px;margin-bottom:14px;box-shadow:var(--shadow-sm);transition:var(--transition)}
+      .card-title{font-size:15px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+      .card-title .icon{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 
-      /* ===== Card ===== */
-      .card {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        padding: 24px;
-        margin-bottom: 16px;
-        box-shadow: var(--shadow-sm);
-        transition: var(--transition);
-      }
-      .card:hover { box-shadow: var(--shadow-md); }
-      .card-title {
-        font-size: 16px;
-        font-weight: 700;
-        margin-bottom: 16px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-      }
-      .card-title .icon {
-        width: 28px; height: 28px;
-        border-radius: 8px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-      }
+      /* ==========================================
+         Session Bar
+         ========================================== */
+      .session-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+      .session-select{flex:1;min-width:220px;padding:9px 36px 9px 12px;border:2px solid var(--line);border-radius:var(--radius-sm);background:var(--card);font-size:13px;color:var(--text);cursor:pointer;transition:var(--transition);appearance:none;background-image:url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+      .session-select:focus{border-color:var(--pri);outline:none;box-shadow:0 0 0 3px var(--pri-glow)}
 
-      /* ===== Session Bar ===== */
-      .session-bar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        flex-wrap: wrap;
-      }
-      .session-select {
-        flex: 1;
-        min-width: 240px;
-        padding: 10px 14px;
-        border: 2px solid var(--line);
-        border-radius: var(--radius-sm);
-        background: var(--card);
-        font-size: 14px;
-        color: var(--text);
-        cursor: pointer;
-        transition: var(--transition);
-        appearance: none;
-        background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: right 12px center;
-        padding-right: 36px;
-      }
-      .session-select:focus { border-color: var(--pri); outline: none; box-shadow: 0 0 0 3px var(--pri-glow); }
+      /* ==========================================
+         Form
+         ========================================== */
+      .form-group{margin-bottom:12px}
+      .form-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+      .form-field{flex:1;min-width:180px}
+      .form-label{display:block;font-size:11px;font-weight:600;color:var(--sub);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+      input,textarea,select{width:100%;padding:9px 12px;border:2px solid var(--line);border-radius:var(--radius-sm);font-size:13px;color:var(--text);background:var(--card);transition:var(--transition);font-family:inherit}
+      input:focus,textarea:focus,select:focus{border-color:var(--pri);outline:none;box-shadow:0 0 0 3px var(--pri-glow)}
+      input:disabled,textarea:disabled,select:disabled{background:var(--line-light);cursor:not-allowed;opacity:.65}
+      textarea{resize:vertical;min-height:72px;line-height:1.5}
 
-      /* ===== Form Elements ===== */
-      .form-group { margin-bottom: 14px; }
-      .form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
-      .form-field { flex: 1; min-width: 200px; }
-      .form-label {
-        display: block;
-        font-size: 12px;
-        font-weight: 600;
-        color: var(--sub);
-        margin-bottom: 6px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-      input, textarea, select {
-        width: 100%;
-        padding: 10px 14px;
-        border: 2px solid var(--line);
-        border-radius: var(--radius-sm);
-        font-size: 14px;
-        color: var(--text);
-        background: var(--card);
-        transition: var(--transition);
-        font-family: inherit;
-      }
-      input:focus, textarea:focus, select:focus {
-        border-color: var(--pri);
-        outline: none;
-        box-shadow: 0 0 0 3px var(--pri-glow);
-      }
-      input:disabled, textarea:disabled, select:disabled {
-        background: var(--line-light);
-        cursor: not-allowed;
-        opacity: 0.7;
-      }
-      textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
+      /* ==========================================
+         Buttons
+         ========================================== */
+      .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;border:none;border-radius:var(--radius-sm);font-size:13px;font-weight:600;cursor:pointer;transition:var(--transition);font-family:inherit;white-space:nowrap}
+      .btn:active{transform:scale(.97)}
+      .btn-primary{background:var(--pri);color:#fff;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+      .btn-primary:hover{background:var(--pri-hover)}
+      .btn-primary:disabled{background:var(--muted);box-shadow:none;cursor:not-allowed;transform:none}
+      .btn-outline{background:transparent;color:var(--sub);border:2px solid var(--line)}
+      .btn-outline:hover{border-color:var(--pri);color:var(--pri);background:var(--pri-light)}
+      .btn-outline:disabled{opacity:.5;cursor:not-allowed;transform:none}
+      .btn-danger{background:var(--danger);color:#fff}
+      .btn-danger:hover{background:var(--danger-hover)}
+      .btn-danger:disabled{background:var(--muted);cursor:not-allowed;transform:none}
+      .btn-sm{padding:6px 12px;font-size:12px}
+      .btn-start{background:linear-gradient(135deg,var(--pri),#818cf8);color:#fff;padding:11px 28px;font-size:14px;box-shadow:0 4px 16px rgba(99,102,241,.35)}
+      .btn-start:hover{box-shadow:0 6px 24px rgba(99,102,241,.45);transform:translateY(-1px)}
+      .btn-start:disabled{background:var(--muted);box-shadow:none;transform:none;cursor:not-allowed}
 
-      /* ===== Buttons ===== */
-      .btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 6px;
-        padding: 10px 20px;
-        border: none;
-        border-radius: var(--radius-sm);
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-        font-family: inherit;
-        white-space: nowrap;
-      }
-      .btn:active { transform: scale(0.97); }
-      .btn-primary { background: var(--pri); color: #fff; box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3); }
-      .btn-primary:hover { background: var(--pri-hover); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4); }
-      .btn-primary:disabled { background: var(--muted); box-shadow: none; cursor: not-allowed; transform: none; }
-      .btn-outline {
-        background: transparent;
-        color: var(--sub);
-        border: 2px solid var(--line);
-      }
-      .btn-outline:hover { border-color: var(--pri); color: var(--pri); background: var(--pri-light); }
-      .btn-outline:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-      .btn-danger { background: var(--danger); color: #fff; }
-      .btn-danger:hover { background: var(--danger-hover); }
-      .btn-danger:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
-      .btn-sm { padding: 7px 14px; font-size: 13px; }
-      .btn-start {
-        background: linear-gradient(135deg, var(--pri), #818cf8);
-        color: #fff;
-        padding: 12px 32px;
-        font-size: 15px;
-        box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
-      }
-      .btn-start:hover { box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45); transform: translateY(-1px); }
-      .btn-start:disabled { background: var(--muted); box-shadow: none; transform: none; cursor: not-allowed; }
+      /* ==========================================
+         Status & Progress
+         ========================================== */
+      .status-bar{display:flex;align-items:center;gap:10px;margin-top:14px;padding:9px 14px;background:var(--line-light);border-radius:var(--radius-sm);font-size:12px;color:var(--sub)}
+      .status-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex-shrink:0}
+      .status-dot.running{background:var(--pri);animation:pulse 1.5s ease-in-out infinite}
+      .status-dot.done{background:var(--success)}
+      .status-dot.error{background:var(--danger)}
+      @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
-      /* ===== Status Bar ===== */
-      .status-bar {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-top: 16px;
-        padding: 10px 16px;
-        background: var(--line-light);
-        border-radius: var(--radius-sm);
-        font-size: 13px;
-        color: var(--sub);
-      }
-      .status-dot {
-        width: 8px; height: 8px;
-        border-radius: 50%;
-        background: var(--muted);
-        flex-shrink: 0;
-      }
-      .status-dot.running {
-        background: var(--pri);
-        animation: pulse 1.5s ease-in-out infinite;
-      }
-      .status-dot.done { background: var(--success); }
-      .status-dot.error { background: var(--danger); }
-      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      .progress-wrap{display:none;margin-top:10px}
+      .progress-wrap.active{display:block}
+      .progress-header{display:flex;justify-content:space-between;margin-bottom:6px;font-size:12px;color:var(--sub)}
+      .progress-track{width:100%;height:5px;background:var(--line);border-radius:3px;overflow:hidden}
+      .progress-fill{height:100%;background:linear-gradient(90deg,var(--pri),#818cf8);border-radius:3px;transition:width .6s ease;width:0%}
 
-      /* ===== Progress Bar ===== */
-      .progress-wrap {
-        display: none;
-        margin-top: 12px;
-      }
-      .progress-wrap.active { display: block; }
-      .progress-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        font-size: 13px;
-        color: var(--sub);
-      }
-      .progress-track {
-        width: 100%;
-        height: 6px;
-        background: var(--line);
-        border-radius: 3px;
-        overflow: hidden;
-      }
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--pri), #818cf8);
-        border-radius: 3px;
-        transition: width 0.5s ease;
-        width: 0%;
-      }
+      /* ==========================================
+         Dialogue Stream Area
+         ========================================== */
+      .stream-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}
+      .stream-header{padding:16px 24px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+      .stream-header-left{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700}
+      .stream-header-left .icon{width:26px;height:26px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
 
-      /* ===== Messages Area ===== */
-      .messages-area {
-        min-height: 200px;
-        max-height: 70vh;
-        overflow-y: auto;
-        scroll-behavior: smooth;
-        padding: 4px;
-      }
-      .messages-area::-webkit-scrollbar { width: 6px; }
-      .messages-area::-webkit-scrollbar-track { background: transparent; }
-      .messages-area::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-      .messages-area::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+      /* Agent Activity Panel */
+      .agent-panel{display:none;padding:12px 24px;background:linear-gradient(135deg,#fafafe,#f5f3ff);border-bottom:1px solid var(--line);animation:fadeIn .25s ease}
+      .agent-panel.active{display:flex;align-items:center;gap:12px}
+      .agent-panel-avatar{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;flex-shrink:0}
+      .agent-panel-info{flex:1}
+      .agent-panel-name{font-size:13px;font-weight:700}
+      .agent-panel-phase{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:6px;margin-top:2px}
+      .spinner{width:12px;height:12px;border:2px solid var(--line);border-top:2px solid var(--pri);border-radius:50%;animation:spin .8s linear infinite}
+      @keyframes spin{to{transform:rotate(360deg)}}
 
-      .msg-empty {
-        text-align: center;
-        padding: 60px 20px;
-        color: var(--muted);
-      }
-      .msg-empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
-      .msg-empty-text { font-size: 14px; }
+      /* Messages container */
+      .messages-area{min-height:200px;max-height:72vh;overflow-y:auto;scroll-behavior:smooth;padding:0}
+      .messages-area::-webkit-scrollbar{width:5px}
+      .messages-area::-webkit-scrollbar-track{background:transparent}
+      .messages-area::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+      .messages-area::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 
-      /* ===== Message Card ===== */
-      .msg {
-        padding: 16px 20px;
-        border-radius: var(--radius);
-        margin: 10px 0;
-        line-height: 1.7;
-        border-left: 4px solid transparent;
-        animation: msgIn 0.35s ease;
-        position: relative;
-        transition: var(--transition);
-      }
-      .msg:hover { box-shadow: var(--shadow-sm); }
-      @keyframes msgIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+      .msg-empty{text-align:center;padding:60px 20px;color:var(--muted)}
+      .msg-empty-icon{font-size:40px;margin-bottom:12px;opacity:.25}
+      .msg-empty-text{font-size:13px;line-height:1.7}
 
-      .msg-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 10px;
-        padding-bottom: 10px;
-        border-bottom: 1px solid rgba(0,0,0,0.06);
-      }
-      .msg-avatar {
-        width: 32px; height: 32px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 14px;
-        font-weight: 700;
-        color: #fff;
-        flex-shrink: 0;
-      }
-      .msg-role {
-        font-size: 14px;
-        font-weight: 700;
-      }
-      .msg-time {
-        margin-left: auto;
-        font-size: 11px;
-        color: var(--muted);
-      }
+      /* ==========================================
+         Round Divider
+         ========================================== */
+      .round-divider{display:flex;align-items:center;gap:12px;padding:14px 24px;background:var(--line-light)}
+      .round-divider-line{flex:1;height:1px;background:var(--line)}
+      .round-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 14px;background:var(--card);border:1px solid var(--line);border-radius:20px;font-size:11px;font-weight:700;color:var(--sub);letter-spacing:.3px;white-space:nowrap;box-shadow:var(--shadow-sm)}
+      .round-badge-dot{width:6px;height:6px;border-radius:50%;background:var(--pri)}
+      .round-badge.synthesis{border-color:var(--c-border);background:var(--c-bg)}
+      .round-badge.synthesis .round-badge-dot{background:var(--c-color)}
 
-      .msg.A { background: var(--agent-a-bg); border-left-color: var(--agent-a); }
-      .msg.A .msg-avatar { background: var(--agent-a); }
-      .msg.A .msg-role { color: var(--agent-a); }
+      /* ==========================================
+         Message Card (redesigned)
+         ========================================== */
+      .msg{padding:18px 24px;border-left:4px solid transparent;animation:msgSlideIn .4s ease;position:relative;transition:background .15s ease}
+      .msg:not(:last-child){border-bottom:1px solid var(--line-light)}
+      .msg:hover{background:rgba(0,0,0,.008)}
+      @keyframes msgSlideIn{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
 
-      .msg.B { background: var(--agent-b-bg); border-left-color: var(--agent-b); }
-      .msg.B .msg-avatar { background: var(--agent-b); }
-      .msg.B .msg-role { color: var(--agent-b); }
+      /* Agent-specific */
+      .msg.A{border-left-color:var(--a-color);background:var(--a-bg)}
+      .msg.A:hover{background:#e8edff}
+      .msg.B{border-left-color:var(--b-color);background:var(--b-bg)}
+      .msg.B:hover{background:#ffe8ea}
+      .msg.C{border-left-color:var(--c-color);background:var(--c-bg)}
+      .msg.C:hover{background:#ddf6fa}
+      .msg.user{border-left-color:var(--u-border);background:var(--u-bg)}
 
-      .msg.C { background: var(--agent-c-bg); border-left-color: var(--agent-c); }
-      .msg.C .msg-avatar { background: var(--agent-c); }
-      .msg.C .msg-role { color: var(--agent-c); }
+      /* Message header */
+      .msg-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+      .msg-avatar{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;flex-shrink:0}
+      .msg.A .msg-avatar{background:var(--a-color)}
+      .msg.B .msg-avatar{background:var(--b-color)}
+      .msg.C .msg-avatar{background:var(--c-color)}
+      .msg.user .msg-avatar{background:var(--u-color)}
 
-      .msg.user { background: var(--agent-user-bg); border-left-color: var(--agent-user-border); }
-      .msg.user .msg-avatar { background: var(--sub); }
-      .msg.user .msg-role { color: var(--sub); }
+      .msg-info{flex:1;min-width:0}
+      .msg-role{font-size:13px;font-weight:700}
+      .msg.A .msg-role{color:var(--a-color)}.msg.B .msg-role{color:var(--b-color)}.msg.C .msg-role{color:var(--c-color)}.msg.user .msg-role{color:var(--u-color)}
+      .msg-subtitle{font-size:11px;color:var(--muted);display:flex;gap:8px;margin-top:1px}
+      .msg-time{font-size:11px;color:var(--muted);flex-shrink:0}
 
-      /* ===== Typing Indicator ===== */
-      .typing-indicator {
-        display: none;
-        padding: 16px 20px;
-        border-radius: var(--radius);
-        margin: 10px 0;
-        background: var(--line-light);
-        border-left: 4px solid var(--pri);
-      }
-      .typing-indicator.active { display: flex; align-items: center; gap: 12px; }
-      .typing-dots { display: flex; gap: 4px; }
-      .typing-dots span {
-        width: 8px; height: 8px;
-        border-radius: 50%;
-        background: var(--pri);
-        animation: typingBounce 1.4s ease-in-out infinite;
-      }
-      .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-      .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-      @keyframes typingBounce {
-        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-        30% { transform: translateY(-8px); opacity: 1; }
-      }
-      .typing-label { font-size: 13px; color: var(--sub); font-weight: 500; }
+      /* ==========================================
+         Markdown Body
+         ========================================== */
+      .markdown-body{font-size:13.5px;color:var(--text);line-height:1.75}
+      .markdown-body h2{font-size:17px;font-weight:700;margin:14px 0 6px;padding-bottom:5px;border-bottom:1px solid rgba(0,0,0,.06)}
+      .markdown-body h3{font-size:15px;font-weight:700;margin:10px 0 4px}
+      .markdown-body h4{font-size:13.5px;font-weight:700;margin:8px 0 3px}
+      .markdown-body h5{font-size:13px;font-weight:600;margin:6px 0 2px;color:var(--sub)}
+      .markdown-body p{margin:5px 0}
+      .markdown-body ul,.markdown-body ol{margin:5px 0 5px 18px}
+      .markdown-body li{margin:2px 0}
+      .markdown-body code{background:rgba(0,0,0,.06);padding:1.5px 6px;border-radius:5px;font-family:'SF Mono','Fira Code',Consolas,monospace;font-size:12px}
+      .markdown-body pre{background:#1e293b;color:#e2e8f0;padding:14px;border-radius:var(--radius-sm);overflow-x:auto;margin:8px 0;font-size:12px;line-height:1.5}
+      .markdown-body pre code{background:none;padding:0;color:inherit;font-size:inherit}
+      .markdown-body a{color:var(--pri);text-decoration:none;font-weight:500}
+      .markdown-body a:hover{text-decoration:underline}
+      .markdown-body blockquote{border-left:3px solid var(--line);padding-left:12px;color:var(--sub);margin:6px 0;font-style:italic}
 
-      /* ===== Markdown Content ===== */
-      .markdown-body { font-size: 14px; color: var(--text); }
-      .markdown-body h2 { font-size: 18px; font-weight: 700; margin: 16px 0 8px; padding-bottom: 6px; border-bottom: 1px solid rgba(0,0,0,0.06); }
-      .markdown-body h3 { font-size: 16px; font-weight: 700; margin: 12px 0 6px; }
-      .markdown-body h4 { font-size: 14px; font-weight: 700; margin: 10px 0 4px; }
-      .markdown-body p { margin: 6px 0; }
-      .markdown-body ul, .markdown-body ol { margin: 6px 0 6px 20px; }
-      .markdown-body li { margin: 3px 0; }
-      .markdown-body code {
-        background: rgba(0,0,0,0.06);
-        padding: 2px 7px;
-        border-radius: 6px;
-        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-        font-size: 12.5px;
-      }
-      .markdown-body pre {
-        background: #1e293b;
-        color: #e2e8f0;
-        padding: 16px;
-        border-radius: var(--radius-sm);
-        overflow-x: auto;
-        margin: 10px 0;
-        font-size: 13px;
-        line-height: 1.5;
-      }
-      .markdown-body pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
-      .markdown-body a { color: var(--pri); text-decoration: none; font-weight: 500; }
-      .markdown-body a:hover { text-decoration: underline; }
-      .markdown-body blockquote {
-        border-left: 3px solid var(--line);
-        padding-left: 14px;
-        color: var(--sub);
-        margin: 8px 0;
-      }
+      /* ==========================================
+         Metadata Sections
+         ========================================== */
+      .meta-sections{margin-top:14px;display:flex;flex-direction:column;gap:10px}
 
-      /* ===== Metadata Sections (citations, retrieval) ===== */
-      .msg-meta {
-        margin-top: 12px;
-        padding-top: 12px;
-        border-top: 1px dashed rgba(0,0,0,0.08);
-      }
-      .msg-meta-title {
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--sub);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 6px;
-      }
-      .msg-meta-list {
-        font-size: 12.5px;
-        color: #475569;
-        line-height: 1.8;
-      }
-      .msg-meta-list a { color: var(--pri); text-decoration: none; }
-      .msg-meta-list a:hover { text-decoration: underline; }
-      .msg-meta-tag {
-        display: inline-block;
-        padding: 2px 8px;
-        background: rgba(0,0,0,0.04);
-        border-radius: 4px;
-        font-size: 11px;
-        color: var(--sub);
-        margin: 2px;
-      }
+      /* Search Directives - pill tags */
+      .search-directives{display:flex;flex-wrap:wrap;gap:6px}
+      .search-pill{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:rgba(0,0,0,.04);border:1px solid rgba(0,0,0,.06);border-radius:20px;font-size:11.5px;color:#475569;transition:var(--transition);max-width:100%}
+      .search-pill:hover{background:rgba(0,0,0,.07)}
+      .search-pill-icon{width:16px;height:16px;border-radius:50%;background:var(--pri);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+      .search-pill-icon svg{width:9px;height:9px;fill:#fff}
+      .search-pill-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .search-pill-domain{display:inline-flex;padding:1px 6px;background:rgba(99,102,241,.1);border-radius:3px;font-size:10px;color:var(--pri);font-weight:600;flex-shrink:0}
 
-      /* ===== Structured JSON Toggle ===== */
-      details { margin-top: 10px; }
-      details summary {
-        font-size: 12px;
-        color: var(--sub);
-        cursor: pointer;
-        padding: 6px 10px;
-        background: rgba(0,0,0,0.03);
-        border-radius: 6px;
-        user-select: none;
-        transition: var(--transition);
-      }
-      details summary:hover { background: rgba(0,0,0,0.06); }
-      details pre {
-        background: #1e293b;
-        color: #e2e8f0;
-        padding: 14px;
-        border-radius: var(--radius-sm);
-        margin-top: 8px;
-        font-size: 12px;
-        line-height: 1.5;
-        overflow-x: auto;
-        max-height: 400px;
-        overflow-y: auto;
-      }
+      /* Retrieval Cards */
+      .retrieval-grid{display:flex;flex-direction:column;gap:6px}
+      .retrieval-card{display:flex;gap:10px;padding:10px 12px;background:rgba(0,0,0,.02);border:1px solid rgba(0,0,0,.05);border-radius:var(--radius-sm);transition:var(--transition);cursor:default}
+      .retrieval-card:hover{background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08)}
+      .retrieval-idx{width:24px;height:24px;border-radius:6px;background:var(--pri);color:#fff;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;margin-top:1px}
+      .retrieval-body{flex:1;min-width:0}
+      .retrieval-title{font-size:12.5px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .retrieval-title a{color:var(--pri);text-decoration:none}
+      .retrieval-title a:hover{text-decoration:underline}
+      .retrieval-url{font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px}
+      .retrieval-snippet{font-size:11.5px;color:var(--sub);line-height:1.5;margin-top:3px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+      .retrieval-score{flex-shrink:0;align-self:flex-start;padding:2px 6px;background:var(--success-light);border-radius:4px;font-size:10px;font-weight:600;color:#065f46}
 
-      /* ===== Settings Page ===== */
-      .settings-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-        gap: 16px;
-      }
-      .settings-card {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        padding: 24px;
-        box-shadow: var(--shadow-sm);
-        transition: var(--transition);
-      }
-      .settings-card:hover { box-shadow: var(--shadow-md); }
-      .settings-card-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 20px;
-        padding-bottom: 14px;
-        border-bottom: 1px solid var(--line);
-      }
-      .settings-badge {
-        width: 36px; height: 36px;
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 16px;
-        font-weight: 700;
-        color: #fff;
-      }
-      .settings-card-title { font-size: 15px; font-weight: 700; }
-      .settings-card-desc { font-size: 12px; color: var(--sub); margin-top: 2px; }
+      /* Meta header */
+      .meta-header{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.5px}
+      .meta-header svg{width:12px;height:12px;fill:var(--sub);flex-shrink:0}
+      .meta-count{background:var(--line-light);padding:1px 6px;border-radius:4px;font-size:10px;color:var(--muted);font-weight:600;margin-left:2px}
 
-      .settings-card.agent-a .settings-badge { background: var(--agent-a); }
-      .settings-card.agent-a .settings-card-title { color: var(--agent-a); }
-      .settings-card.agent-b .settings-badge { background: var(--agent-b); }
-      .settings-card.agent-b .settings-card-title { color: var(--agent-b); }
-      .settings-card.agent-c .settings-badge { background: var(--agent-c); }
-      .settings-card.agent-c .settings-card-title { color: var(--agent-c); }
-      .settings-card.tavily .settings-badge { background: var(--warn); }
-      .settings-card.tavily .settings-card-title { color: #b45309; }
+      /* ==========================================
+         Structured JSON Toggle
+         ========================================== */
+      details{margin-top:10px}
+      details summary{font-size:11.5px;color:var(--sub);cursor:pointer;padding:5px 10px;background:rgba(0,0,0,.03);border-radius:var(--radius-xs);user-select:none;transition:var(--transition);display:inline-flex;align-items:center;gap:4px}
+      details summary:hover{background:rgba(0,0,0,.06)}
+      details[open] summary{margin-bottom:6px}
+      details pre{background:#1e293b;color:#e2e8f0;padding:12px;border-radius:var(--radius-sm);font-size:11.5px;line-height:1.5;overflow-x:auto;max-height:360px;overflow-y:auto}
 
-      /* ===== Responsive ===== */
-      @media (max-width: 768px) {
-        .header-inner { flex-direction: column; gap: 12px; }
-        .shell { padding: 16px 12px 40px; }
-        .card { padding: 16px; }
-        .session-bar { flex-direction: column; }
-        .session-select { min-width: 100%; }
-        .form-row { flex-direction: column; }
-        .form-field { min-width: 100%; }
-        .settings-grid { grid-template-columns: 1fr; }
-        .btn-start { width: 100%; }
+      /* ==========================================
+         Settings Page
+         ========================================== */
+      .settings-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+      .settings-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:22px;box-shadow:var(--shadow-sm);transition:var(--transition)}
+      .settings-card:hover{box-shadow:var(--shadow-md)}
+      .settings-card-header{display:flex;align-items:center;gap:10px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+      .settings-badge{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff}
+      .settings-card-title{font-size:14px;font-weight:700}
+      .settings-card-desc{font-size:11px;color:var(--sub);margin-top:2px}
+      .settings-card.agent-a .settings-badge{background:var(--a-color)}.settings-card.agent-a .settings-card-title{color:var(--a-color)}
+      .settings-card.agent-b .settings-badge{background:var(--b-color)}.settings-card.agent-b .settings-card-title{color:var(--b-color)}
+      .settings-card.agent-c .settings-badge{background:var(--c-color)}.settings-card.agent-c .settings-card-title{color:var(--c-color)}
+      .settings-card.tavily .settings-badge{background:var(--warn)}.settings-card.tavily .settings-card-title{color:#b45309}
+
+      /* ==========================================
+         Responsive
+         ========================================== */
+      @media(max-width:768px){
+        .header-inner{flex-direction:column;gap:10px}
+        .shell{padding:14px 10px 40px}
+        .card{padding:14px 16px}
+        .session-bar{flex-direction:column}
+        .session-select{min-width:100%}
+        .form-row{flex-direction:column}
+        .form-field{min-width:100%}
+        .settings-grid{grid-template-columns:1fr}
+        .btn-start{width:100%}
+        .msg{padding:14px 16px}
+        .stream-header{padding:12px 16px}
+        .round-divider{padding:10px 16px}
       }
     </style>
   </head>
@@ -589,9 +313,9 @@
     </header>
 
     <div class="shell">
-      <!-- ===== Chat Page ===== -->
+      <!-- ===== CHAT PAGE ===== -->
       <div id="chatPage" class="page active">
-        <!-- Session Management -->
+        <!-- Session -->
         <div class="card">
           <div class="card-title">
             <span class="icon" style="background:var(--pri-light);color:var(--pri);">S</span>
@@ -604,210 +328,101 @@
           </div>
         </div>
 
-        <!-- Input Form -->
+        <!-- Topic -->
         <div class="card">
           <div class="card-title">
-            <span class="icon" style="background:#fef3c7;color:#b45309;">T</span>
+            <span class="icon" style="background:var(--warn-light);color:#b45309;">T</span>
             Topic Configuration
           </div>
           <div class="form-row">
-            <div class="form-field" style="flex:2">
-              <label class="form-label" for="topic">Event Topic</label>
-              <input id="topic" placeholder="Enter the political event topic..." />
-            </div>
-            <div class="form-field" style="flex:1">
-              <label class="form-label" for="timeContext">Time Context</label>
-              <input id="timeContext" placeholder="e.g. 72 hours after..." />
-            </div>
+            <div class="form-field" style="flex:2"><label class="form-label" for="topic">Event Topic</label><input id="topic" placeholder="Enter the political event topic..." /></div>
+            <div class="form-field" style="flex:1"><label class="form-label" for="timeContext">Time Context</label><input id="timeContext" placeholder="e.g. 72 hours after..." /></div>
           </div>
           <div class="form-row">
-            <div class="form-field" style="flex:3">
-              <label class="form-label" for="prGoal">PR Goal</label>
-              <input id="prGoal" placeholder="e.g. stabilize sentiment, clarify misunderstanding, rebuild trust..." />
-            </div>
-            <div class="form-field" style="flex:0 0 100px">
-              <label class="form-label" for="maxRounds">Rounds</label>
-              <input id="maxRounds" type="number" value="3" min="1" max="8" />
-            </div>
+            <div class="form-field" style="flex:3"><label class="form-label" for="prGoal">PR Goal</label><input id="prGoal" placeholder="e.g. stabilize sentiment, clarify misunderstanding, rebuild trust..." /></div>
+            <div class="form-field" style="flex:0 0 90px"><label class="form-label" for="maxRounds">Rounds</label><input id="maxRounds" type="number" value="3" min="1" max="8" /></div>
           </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <button id="startBtn" class="btn btn-start" type="button">Start Analysis</button>
-            <button id="stopBtn" class="btn btn-outline btn-sm" type="button" style="display:none;">Stop</button>
+            <button id="stopBtn" class="btn btn-outline btn-sm" type="button" style="display:none">Stop</button>
           </div>
-
-          <!-- Status Bar -->
           <div class="status-bar">
             <span id="statusDot" class="status-dot"></span>
             <span id="runStatus">Ready</span>
           </div>
-
-          <!-- Progress Bar -->
           <div id="progressWrap" class="progress-wrap">
             <div class="progress-header">
               <span id="progressLabel">Round 0 / 0</span>
               <span id="progressPct">0%</span>
             </div>
-            <div class="progress-track">
-              <div id="progressFill" class="progress-fill"></div>
-            </div>
+            <div class="progress-track"><div id="progressFill" class="progress-fill"></div></div>
           </div>
         </div>
 
-        <!-- Messages -->
-        <div class="card" style="padding-bottom:8px;">
-          <div class="card-title">
-            <span class="icon" style="background:#dcfce7;color:#16a34a;">D</span>
-            Dialogue Stream
+        <!-- ===== Dialogue Stream ===== -->
+        <div class="stream-card">
+          <div class="stream-header">
+            <div class="stream-header-left">
+              <span class="icon" style="background:#dcfce7;color:#16a34a">D</span>
+              Dialogue Stream
+            </div>
+            <span id="msgCount" style="font-size:12px;color:var(--muted)"></span>
           </div>
-          <div id="messages" class="messages-area">
-            <div class="msg-empty">
-              <div class="msg-empty-icon">&#9672;</div>
-              <div class="msg-empty-text">No messages yet. Configure your topic and click "Start Analysis" to begin.</div>
+
+          <!-- Active Agent Panel -->
+          <div id="agentPanel" class="agent-panel">
+            <div id="agentPanelAvatar" class="agent-panel-avatar">A</div>
+            <div class="agent-panel-info">
+              <div id="agentPanelName" class="agent-panel-name">Agent A</div>
+              <div class="agent-panel-phase">
+                <div class="spinner" id="agentSpinner"></div>
+                <span id="agentPanelPhase">Searching &amp; analyzing...</span>
+              </div>
             </div>
           </div>
-          <!-- Typing Indicator -->
-          <div id="typingIndicator" class="typing-indicator">
-            <div class="typing-dots"><span></span><span></span><span></span></div>
-            <span class="typing-label" id="typingLabel">Agent is thinking...</span>
+
+          <!-- Messages (incremental) -->
+          <div id="messages" class="messages-area">
+            <div class="msg-empty" id="emptyState">
+              <div class="msg-empty-icon">&#9672;</div>
+              <div class="msg-empty-text">No messages yet.<br/>Configure your topic and click <strong>Start Analysis</strong> to begin.</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ===== Settings Page ===== -->
+      <!-- ===== SETTINGS PAGE ===== -->
       <div id="settingsPage" class="page">
         <div class="settings-grid">
-          <!-- Agent A -->
           <div class="settings-card agent-a">
-            <div class="settings-card-header">
-              <div class="settings-badge">A</div>
-              <div>
-                <div class="settings-card-title">Agent A - Analyst</div>
-                <div class="settings-card-desc">Proposes structured solutions with evidence</div>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Model</label>
-              <input id="a_model" value="gpt-4o-mini" placeholder="model_name" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">API Endpoint</label>
-              <input id="a_base" value="https://api.openai.com/v1" placeholder="base_url" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">API Key</label>
-              <input id="a_key" type="password" placeholder="Enter API key..." />
-            </div>
-            <div class="form-row">
-              <div class="form-field">
-                <label class="form-label">Temperature</label>
-                <input id="a_temp" value="0.7" type="number" step="0.1" min="0" max="2" />
-              </div>
-              <div class="form-field">
-                <label class="form-label">Max Tokens</label>
-                <input id="a_max" value="800" type="number" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Capability Prompt</label>
-              <textarea id="a_capability" placeholder="Agent capability preference prompt...">偏向给出可执行步骤、风险与验证方案。</textarea>
-            </div>
+            <div class="settings-card-header"><div class="settings-badge">A</div><div><div class="settings-card-title">Agent A - Analyst</div><div class="settings-card-desc">Proposes structured solutions with evidence</div></div></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="a_model" value="gpt-4o-mini" placeholder="model_name" /></div>
+            <div class="form-group"><label class="form-label">API Endpoint</label><input id="a_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+            <div class="form-group"><label class="form-label">API Key</label><input id="a_key" type="password" placeholder="Enter API key..." /></div>
+            <div class="form-row"><div class="form-field"><label class="form-label">Temperature</label><input id="a_temp" value="0.7" type="number" step="0.1" min="0" max="2" /></div><div class="form-field"><label class="form-label">Max Tokens</label><input id="a_max" value="800" type="number" /></div></div>
+            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="a_capability">偏向给出可执行步骤、风险与验证方案。</textarea></div>
           </div>
-
-          <!-- Agent B -->
           <div class="settings-card agent-b">
-            <div class="settings-card-header">
-              <div class="settings-badge">B</div>
-              <div>
-                <div class="settings-card-title">Agent B - Challenger</div>
-                <div class="settings-card-desc">Critiques proposals with counter-evidence</div>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Model</label>
-              <input id="b_model" value="gpt-4o-mini" placeholder="model_name" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">API Endpoint</label>
-              <input id="b_base" value="https://api.openai.com/v1" placeholder="base_url" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">API Key</label>
-              <input id="b_key" type="password" placeholder="Enter API key..." />
-            </div>
-            <div class="form-row">
-              <div class="form-field">
-                <label class="form-label">Temperature</label>
-                <input id="b_temp" value="0.7" type="number" step="0.1" min="0" max="2" />
-              </div>
-              <div class="form-field">
-                <label class="form-label">Max Tokens</label>
-                <input id="b_max" value="800" type="number" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Capability Prompt</label>
-              <textarea id="b_capability" placeholder="Agent capability preference prompt...">偏向挑战假设、提出反例与可复现实验。</textarea>
-            </div>
+            <div class="settings-card-header"><div class="settings-badge">B</div><div><div class="settings-card-title">Agent B - Challenger</div><div class="settings-card-desc">Critiques proposals with counter-evidence</div></div></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="b_model" value="gpt-4o-mini" placeholder="model_name" /></div>
+            <div class="form-group"><label class="form-label">API Endpoint</label><input id="b_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+            <div class="form-group"><label class="form-label">API Key</label><input id="b_key" type="password" placeholder="Enter API key..." /></div>
+            <div class="form-row"><div class="form-field"><label class="form-label">Temperature</label><input id="b_temp" value="0.7" type="number" step="0.1" min="0" max="2" /></div><div class="form-field"><label class="form-label">Max Tokens</label><input id="b_max" value="800" type="number" /></div></div>
+            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="b_capability">偏向挑战假设、提出反例与可复现实验。</textarea></div>
           </div>
-
-          <!-- Agent C -->
           <div class="settings-card agent-c">
-            <div class="settings-card-header">
-              <div class="settings-badge">C</div>
-              <div>
-                <div class="settings-card-title">Agent C - Observer</div>
-                <div class="settings-card-desc">Synthesizes final strategy report</div>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Model</label>
-              <input id="c_model" value="gpt-4o-mini" placeholder="model_name" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">API Endpoint</label>
-              <input id="c_base" value="https://api.openai.com/v1" placeholder="base_url" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">API Key</label>
-              <input id="c_key" type="password" placeholder="Enter API key..." />
-            </div>
-            <div class="form-row">
-              <div class="form-field">
-                <label class="form-label">Temperature</label>
-                <input id="c_temp" value="0.7" type="number" step="0.1" min="0" max="2" />
-              </div>
-              <div class="form-field">
-                <label class="form-label">Max Tokens</label>
-                <input id="c_max" value="1000" type="number" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Capability Prompt</label>
-              <textarea id="c_capability" placeholder="Agent capability preference prompt...">偏向形成可执行的最终策略报告，明确优先级、风险预案和监测指标。</textarea>
-            </div>
+            <div class="settings-card-header"><div class="settings-badge">C</div><div><div class="settings-card-title">Agent C - Observer</div><div class="settings-card-desc">Synthesizes final strategy report</div></div></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="c_model" value="gpt-4o-mini" placeholder="model_name" /></div>
+            <div class="form-group"><label class="form-label">API Endpoint</label><input id="c_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+            <div class="form-group"><label class="form-label">API Key</label><input id="c_key" type="password" placeholder="Enter API key..." /></div>
+            <div class="form-row"><div class="form-field"><label class="form-label">Temperature</label><input id="c_temp" value="0.7" type="number" step="0.1" min="0" max="2" /></div><div class="form-field"><label class="form-label">Max Tokens</label><input id="c_max" value="1000" type="number" /></div></div>
+            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="c_capability">偏向形成可执行的最终策略报告，明确优先级、风险预案和监测指标。</textarea></div>
           </div>
-
-          <!-- Tavily -->
           <div class="settings-card tavily">
-            <div class="settings-card-header">
-              <div class="settings-badge">T</div>
-              <div>
-                <div class="settings-card-title">Tavily Search</div>
-                <div class="settings-card-desc">External retrieval configuration</div>
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Tavily API Key</label>
-              <input id="tavilyKey" type="password" placeholder="Enter Tavily API key..." />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Search Top-K</label>
-              <input id="searchTopk" type="number" value="5" min="1" max="20" />
-            </div>
-            <div class="form-group">
-              <label class="form-label">Domain Filters</label>
-              <input id="searchDomains" placeholder="Comma-separated domains (e.g. reddit.com, ptt.cc)" />
-            </div>
+            <div class="settings-card-header"><div class="settings-badge">T</div><div><div class="settings-card-title">Tavily Search</div><div class="settings-card-desc">External retrieval configuration</div></div></div>
+            <div class="form-group"><label class="form-label">API Key</label><input id="tavilyKey" type="password" placeholder="Enter Tavily API key..." /></div>
+            <div class="form-group"><label class="form-label">Search Top-K</label><input id="searchTopk" type="number" value="5" min="1" max="20" /></div>
+            <div class="form-group"><label class="form-label">Domain Filters</label><input id="searchDomains" placeholder="Comma-separated (e.g. reddit.com, ptt.cc)" /></div>
           </div>
         </div>
       </div>
