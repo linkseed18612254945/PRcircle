@@ -442,24 +442,24 @@
         <div class="settings-grid">
           <div class="settings-card agent-a">
             <div class="settings-card-header"><div class="settings-badge">A</div><div><div class="settings-card-title">Agent A - Analyst</div><div class="settings-card-desc">Proposes structured solutions with evidence</div></div></div>
-            <div class="form-group"><label class="form-label">Model</label><input id="a_model" value="gpt-4o-mini" placeholder="model_name" /></div>
-            <div class="form-group"><label class="form-label">API Endpoint</label><input id="a_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="a_model" value="gemini-3-flash-preview-nothinking" placeholder="model_name" /></div>
+            <div class="form-group"><label class="form-label">API Endpoint</label><input id="a_base" value="https://api.apiyi.com/v1" placeholder="base_url" /></div>
             <div class="form-group"><label class="form-label">API Key</label><input id="a_key" type="password" placeholder="Enter API key..." /></div>
             <div class="form-row"><div class="form-field"><label class="form-label">Temperature</label><input id="a_temp" value="0.7" type="number" step="0.1" min="0" max="2" /></div><div class="form-field"><label class="form-label">Max Tokens</label><input id="a_max" value="800" type="number" /></div></div>
-            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="a_capability">偏向给出可执行步骤、风险与验证方案。</textarea></div>
+            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="a_capability"></textarea></div>
           </div>
           <div class="settings-card agent-b">
             <div class="settings-card-header"><div class="settings-badge">B</div><div><div class="settings-card-title">Agent B - Challenger</div><div class="settings-card-desc">Critiques proposals with counter-evidence</div></div></div>
-            <div class="form-group"><label class="form-label">Model</label><input id="b_model" value="gpt-4o-mini" placeholder="model_name" /></div>
-            <div class="form-group"><label class="form-label">API Endpoint</label><input id="b_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="b_model" value="gemini-3-flash-preview-nothinking" placeholder="model_name" /></div>
+            <div class="form-group"><label class="form-label">API Endpoint</label><input id="b_base" value="https://api.apiyi.com/v1" placeholder="base_url" /></div>
             <div class="form-group"><label class="form-label">API Key</label><input id="b_key" type="password" placeholder="Enter API key..." /></div>
             <div class="form-row"><div class="form-field"><label class="form-label">Temperature</label><input id="b_temp" value="0.7" type="number" step="0.1" min="0" max="2" /></div><div class="form-field"><label class="form-label">Max Tokens</label><input id="b_max" value="800" type="number" /></div></div>
-            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="b_capability">偏向挑战假设、提出反例与可复现实验。</textarea></div>
+            <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="b_capability"></textarea></div>
           </div>
           <div class="settings-card agent-c">
             <div class="settings-card-header"><div class="settings-badge">C</div><div><div class="settings-card-title">Agent C - Observer</div><div class="settings-card-desc">Synthesizes final strategy report</div></div></div>
-            <div class="form-group"><label class="form-label">Model</label><input id="c_model" value="gpt-4o-mini" placeholder="model_name" /></div>
-            <div class="form-group"><label class="form-label">API Endpoint</label><input id="c_base" value="https://api.openai.com/v1" placeholder="base_url" /></div>
+            <div class="form-group"><label class="form-label">Model</label><input id="c_model" value="gemini-3-flash-preview-nothinking" placeholder="model_name" /></div>
+            <div class="form-group"><label class="form-label">API Endpoint</label><input id="c_base" value=https://api.apiyi.com/v1" placeholder="base_url" /></div>
             <div class="form-group"><label class="form-label">API Key</label><input id="c_key" type="password" placeholder="Enter API key..." /></div>
             <div class="form-row"><div class="form-field"><label class="form-label">Temperature</label><input id="c_temp" value="0.7" type="number" step="0.1" min="0" max="2" /></div><div class="form-field"><label class="form-label">Max Tokens</label><input id="c_max" value="1000" type="number" /></div></div>
             <div class="form-group"><label class="form-label">Capability Prompt</label><textarea id="c_capability">偏向形成可执行的最终策略报告，明确优先级、风险预案和监测指标。</textarea></div>
@@ -467,7 +467,7 @@
           <div class="settings-card tavily">
             <div class="settings-card-header"><div class="settings-badge">T</div><div><div class="settings-card-title">Tavily Search</div><div class="settings-card-desc">External retrieval configuration</div></div></div>
             <div class="form-group"><label class="form-label">API Key</label><input id="tavilyKey" type="password" placeholder="Enter Tavily API key..." /></div>
-            <div class="form-group"><label class="form-label">Search Top-K</label><input id="searchTopk" type="number" value="5" min="1" max="20" /></div>
+            <div class="form-group"><label class="form-label">Search Top-K</label><input id="searchTopk" type="number" value="3" min="1" max="20" /></div>
             <div class="form-group"><label class="form-label">Domain Filters</label><input id="searchDomains" placeholder="Comma-separated (e.g. reddit.com, ptt.cc)" /></div>
           </div>
         </div>
