@@ -24,6 +24,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# SSE headers that prevent buffering at every layer of the stack
+_SSE_HEADERS = {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    # Nginx / reverse-proxy: disable buffering
+    "X-Accel-Buffering": "no",
+    # Prevent gzip middleware from buffering the stream
+    "Content-Encoding": "identity",
+}
+
 
 def build_engine(req: RunRequest) -> DialogueEngine:
     search_tool = TavilySearchTool(api_key=req.tavily_api_key)
@@ -85,13 +96,20 @@ async def run_dialogue_stream(req: RunRequest) -> StreamingResponse:
     )
 
     async def event_gen():
+        # Send an initial comment to flush HTTP buffers at every proxy layer.
+        # A 2 KB padding guarantees that nginx / CloudFlare / etc. release
+        # their internal buffers immediately instead of waiting for more data.
+        padding = ": " + ("stream-start" * 80) + "\n\n"
+        yield padding.encode("utf-8")
+
         async for event in engine.run_stream(state):
-            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            line = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            yield line.encode("utf-8")
 
     return StreamingResponse(
         event_gen(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        status_code=200,
+        headers=_SSE_HEADERS,
     )
 
 

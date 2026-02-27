@@ -3,9 +3,10 @@ from __future__ import annotations
 import json
 import re
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from typing import Any, Literal
 
-from .llm_client import call_llm
+from .llm_client import call_llm, call_llm_stream
 from .models import AgentMessage, DialogueState, LLMConfig, RetrievalResult, SearchDirective
 from .search_tool import TavilySearchTool
 
@@ -13,7 +14,7 @@ from .search_tool import TavilySearchTool
 class BaseAgent(ABC):
     def __init__(
         self,
-        agent_id: Literal["A", "B"],
+        agent_id: Literal["A", "B", "C"],
         role: Literal["analysis", "challenge"],
         llm_config: LLMConfig,
         system_prompt: str,
@@ -32,7 +33,14 @@ class BaseAgent(ABC):
         self.default_search_domains = [d.strip() for d in (default_search_domains or []) if d.strip()]
 
     @abstractmethod
-    async def generate(self, state: DialogueState) -> AgentMessage:
+    async def generate(self, state: DialogueState) -> AsyncGenerator[dict, None]:
+        """
+        Async generator that yields a sequence of events:
+          {"event": "search_start",   "directives": [...]}
+          {"event": "generate_start"}
+          {"event": "token",          "content": "<text fragment>"}   (many times)
+          {"event": "done",           "message": AgentMessage}
+        """
         raise NotImplementedError
 
     async def maybe_call_search(
@@ -48,8 +56,17 @@ class BaseAgent(ABC):
         )
 
     async def call_llm(self, messages: list[dict[str, str]]) -> str:
+        """Non-streaming call – used only for internal planning steps."""
         return await call_llm(messages=messages, config=self.llm_config)
 
+    async def stream_llm(self, messages: list[dict[str, str]]) -> AsyncGenerator[str, None]:
+        """Streaming call – yields tokens for the main response."""
+        async for token in call_llm_stream(messages=messages, config=self.llm_config):
+            yield token
+
+    # ------------------------------------------------------------------ #
+    # Utilities (unchanged from original)                                  #
+    # ------------------------------------------------------------------ #
     def _try_extract_json(self, text: str) -> dict[str, Any]:
         text = text.strip()
         if not text:
@@ -143,7 +160,7 @@ class BaseAgent(ABC):
             "请按以下步骤构建检索词，再输出4条结果(JSON数组字符串)：\n"
             "步骤1【提炼对象】：先从上下文中提炼具体对象词（人物/机构/平台/城市/政策名/话题标签）。\n"
             "步骤2【锁定意图】：为每条词指定一个检索意图（事实核验/反例查找/传播链路/合规边界）。\n"
-            "步骤3【组合结构】：按“对象词 + 时间或场景 + 冲突点/争议点 + 证据类型”拼接。\n"
+            "步骤3【组合结构】：按"对象词 + 时间或场景 + 冲突点/争议点 + 证据类型"拼接。\n"
             "步骤4【发散隐藏变量】：至少1条加入隐藏变量，如利益相关方、二阶影响、执行约束。\n"
             "步骤5【去同质化】：4条词必须角度不同，不能只是同义改写。\n"
             "步骤6【站点范围】：按需要为每条词附加1-3个站点域名（如 reddit.com, ptt.cc, weibo.com），没有必要可留空。\n"
@@ -209,27 +226,36 @@ class BaseAgent(ABC):
         ]
 
 
+# --------------------------------------------------------------------------- #
+# AnalysisAgent                                                                #
+# --------------------------------------------------------------------------- #
 class AnalysisAgent(BaseAgent):
-    async def generate(self, state: DialogueState) -> AgentMessage:
+    async def generate(self, state: DialogueState) -> AsyncGenerator[dict, None]:  # type: ignore[override]
         prior_critic = next((m for m in reversed(state.messages) if m.get("role") == "B"), None)
         prior_questions = prior_critic.get("content", "") if prior_critic else "无"
         own_last = next((m for m in reversed(state.messages) if m.get("role") == "A"), None)
         own_last_content = own_last.get("content", "") if own_last else ""
 
+        # ── Phase 1: plan searches ─────────────────────────────────────────
         search_directives = await self._plan_search_queries(
             state=state,
             counterpart_message=prior_questions,
             own_last_message=own_last_content,
         )
+        yield {
+            "event": "search_start",
+            "directives": [{"query": d.query, "domains": d.domains} for d in search_directives],
+        }
 
+        # ── Phase 2: execute searches ──────────────────────────────────────
         merged_results: list[RetrievalResult] = []
         for directive in search_directives:
             merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains))
-
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, prior_questions)
         retrieval_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel])
 
+        # ── Phase 3: stream main response ─────────────────────────────────
         user_prompt = (
             f"话题: {state.topic}\n"
             f"时间背景: {state.time_context or '未提供'}\n"
@@ -246,44 +272,63 @@ class AnalysisAgent(BaseAgent):
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
             "请在回答中明确：你使用了哪些证据、哪些仍需验证。"
         )
-        response = await self.call_llm(
-            [
-                {"role": "system", "content": self._build_system_prompt()},
-                {"role": "user", "content": user_prompt},
-            ]
-        )
-        return AgentMessage(
-            role="A",
-            content=response,
-            structured=self._try_extract_json(response),
-            retrievals=new_intel,
-            citation_sources=focus_intel,
-            search_queries=[d.query for d in search_directives],
-            search_directives=search_directives,
-        )
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        yield {"event": "generate_start"}
+
+        full_content = ""
+        async for token in self.stream_llm(messages):
+            full_content += token
+            yield {"event": "token", "content": token}
+
+        # ── Phase 4: emit complete message ────────────────────────────────
+        yield {
+            "event": "done",
+            "message": AgentMessage(
+                role="A",
+                content=full_content,
+                structured=self._try_extract_json(full_content),
+                retrievals=new_intel,
+                citation_sources=focus_intel,
+                search_queries=[d.query for d in search_directives],
+                search_directives=search_directives,
+            ),
+        }
 
 
+# --------------------------------------------------------------------------- #
+# ChallengeAgent                                                               #
+# --------------------------------------------------------------------------- #
 class ChallengeAgent(BaseAgent):
-    async def generate(self, state: DialogueState) -> AgentMessage:
+    async def generate(self, state: DialogueState) -> AsyncGenerator[dict, None]:  # type: ignore[override]
         last_a = next((m for m in reversed(state.messages) if m.get("role") == "A"), None)
         a_reference = last_a.get("content", "") if last_a else ""
         own_last = next((m for m in reversed(state.messages) if m.get("role") == "B"), None)
         own_last_content = own_last.get("content", "") if own_last else ""
 
+        # ── Phase 1: plan searches ─────────────────────────────────────────
         search_directives = await self._plan_search_queries(
             state=state,
             counterpart_message=a_reference,
             own_last_message=own_last_content,
         )
+        yield {
+            "event": "search_start",
+            "directives": [{"query": d.query, "domains": d.domains} for d in search_directives],
+        }
 
+        # ── Phase 2: execute searches ──────────────────────────────────────
         merged_results: list[RetrievalResult] = []
         for directive in search_directives:
             merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains))
-
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, a_reference)
         retrieval_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel])
 
+        # ── Phase 3: stream main response ─────────────────────────────────
         user_prompt = (
             f"话题: {state.topic}\n"
             f"时间背景: {state.time_context or '未提供'}\n"
@@ -299,25 +344,37 @@ class ChallengeAgent(BaseAgent):
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
             "请基于证据提出关键批评、明确问题（至少1个）和测试建议。"
         )
-        response = await self.call_llm(
-            [
-                {"role": "system", "content": self._build_system_prompt()},
-                {"role": "user", "content": user_prompt},
-            ]
-        )
-        return AgentMessage(
-            role="B",
-            content=response,
-            structured=self._try_extract_json(response),
-            retrievals=new_intel,
-            citation_sources=focus_intel,
-            search_queries=[d.query for d in search_directives],
-            search_directives=search_directives,
-        )
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        yield {"event": "generate_start"}
+
+        full_content = ""
+        async for token in self.stream_llm(messages):
+            full_content += token
+            yield {"event": "token", "content": token}
+
+        yield {
+            "event": "done",
+            "message": AgentMessage(
+                role="B",
+                content=full_content,
+                structured=self._try_extract_json(full_content),
+                retrievals=new_intel,
+                citation_sources=focus_intel,
+                search_queries=[d.query for d in search_directives],
+                search_directives=search_directives,
+            ),
+        }
 
 
+# --------------------------------------------------------------------------- #
+# ObserverAgent                                                                #
+# --------------------------------------------------------------------------- #
 class ObserverAgent(BaseAgent):
-    async def generate(self, state: DialogueState) -> AgentMessage:
+    async def generate(self, state: DialogueState) -> AsyncGenerator[dict, None]:  # type: ignore[override]
         dialogue_lines: list[str] = []
         for m in state.messages:
             role = m.get("role", "")
@@ -339,19 +396,27 @@ class ObserverAgent(BaseAgent):
             f"引用目录（回答中请使用 [R1]/[R2] 标注证据来源）:\n{self._format_citation_catalog(focus_intel)}\n"
             "请输出最终策略报告，要求可直接给PR团队执行。"
         )
+        messages = [
+            {"role": "system", "content": self._build_system_prompt()},
+            {"role": "user", "content": user_prompt},
+        ]
 
-        response = await self.call_llm(
-            [
-                {"role": "system", "content": self._build_system_prompt()},
-                {"role": "user", "content": user_prompt},
-            ]
-        )
-        return AgentMessage(
-            role="C",
-            content=response,
-            structured=self._try_extract_json(response),
-            retrievals=[],
-            citation_sources=focus_intel,
-            search_queries=[],
-            search_directives=[],
-        )
+        yield {"event": "generate_start"}
+
+        full_content = ""
+        async for token in self.stream_llm(messages):
+            full_content += token
+            yield {"event": "token", "content": token}
+
+        yield {
+            "event": "done",
+            "message": AgentMessage(
+                role="C",
+                content=full_content,
+                structured=self._try_extract_json(full_content),
+                retrievals=[],
+                citation_sources=focus_intel,
+                search_queries=[],
+                search_directives=[],
+            ),
+        }
