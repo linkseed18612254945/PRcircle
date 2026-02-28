@@ -68,9 +68,9 @@ const PHASE_LABEL = {
   synthesizing: 'Synthesizing final report…',
 };
 const AGENT_COLOR = {
-  A: 'var(--a-color)',
-  B: 'var(--b-color)',
-  C: 'var(--c-color)',
+  A: 'var(--a)',
+  B: 'var(--b)',
+  C: 'var(--c)',
 };
 
 // ─────────────────────────────────────────────────────────────
