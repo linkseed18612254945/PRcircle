@@ -296,6 +296,13 @@ function buildMessageNode(m) {
           t.textContent = dm;
           pill.appendChild(t);
         });
+        if (d.days) {
+          const t = document.createElement('span');
+          t.className = 'search-pill-days';
+          t.textContent = `${d.days}d`;
+          t.title = `过去 ${d.days} 天`;
+          pill.appendChild(t);
+        }
         pills.appendChild(pill);
       });
       sec.appendChild(pills);
