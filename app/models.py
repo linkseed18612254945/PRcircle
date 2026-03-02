@@ -29,6 +29,7 @@ class RetrievalResult(BaseModel):
 class SearchDirective(BaseModel):
     query: str
     domains: list[str] = Field(default_factory=list)
+    days: int | None = None  # past-N-days filter for Tavily; None = no restriction
 
 
 class AgentMessage(BaseModel):

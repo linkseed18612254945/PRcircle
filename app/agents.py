@@ -48,11 +48,13 @@ class BaseAgent(ABC):
         query: str,
         topk: int | None = None,
         domains: list[str] | None = None,
+        days: int | None = None,
     ) -> list[RetrievalResult]:
         return await self.search_tool.search(
             query=query,
             topk=topk or self.search_topk,
             include_domains=domains or self.default_search_domains,
+            days=days,
         )
 
     async def call_llm(self, messages: list[dict[str, str]]) -> str:
@@ -137,7 +139,7 @@ class BaseAgent(ABC):
                 continue
             seen.add(norm)
             domains = [d.strip() for d in (directive.domains or []) if d.strip()]
-            kept.append(SearchDirective(query=q, domains=domains))
+            kept.append(SearchDirective(query=q, domains=domains, days=directive.days))
             if len(kept) >= max_count:
                 break
         return kept
@@ -164,8 +166,14 @@ class BaseAgent(ABC):
             "步骤4【发散隐藏变量】：至少1条加入隐藏变量，如利益相关方、二阶影响、执行约束。\n"
             "步骤5【去同质化】：4条词必须角度不同，不能只是同义改写。\n"
             "步骤6【站点范围】：按需要为每条词附加1-3个站点域名（如 reddit.com, ptt.cc, weibo.com），没有必要可留空。\n"
+            "步骤7【时间范围】：为每条词指定 days 字段（过去N天，1-365之间的整数）：\n"
+            "  - 突发事件/实时舆情 → 7或14；\n"
+            "  - 近期动态/月度追踪 → 30；\n"
+            "  - 背景调研/季度复盘 → 90；\n"
+            "  - 历史判例/长周期分析 → 365；\n"
+            "  - 不限时间（全量检索）→ 省略 days 字段或设为 null。\n"
             "输出要求：\n"
-            '- 每条都必须是对象：{"query":"...","domains":["..."]}；\n'
+            '- 每条都必须是对象：{"query":"...","domains":["..."],"days":30}；\n'
             "- query必须是可直接搜索的完整短句；\n"
             "- 避免抽象空词（如：策略、风险、舆情分析）；\n"
             "- 尽量使用具体名词和可验证线索词（通报/判例/数据截图/时间线/原始信源）。"
@@ -189,10 +197,18 @@ class BaseAgent(ABC):
                         domains = item.get("domains") or []
                         if not isinstance(domains, list):
                             domains = []
+                        days_raw = item.get("days")
+                        try:
+                            days = int(days_raw) if days_raw is not None else None
+                            if days is not None and not (1 <= days <= 365):
+                                days = None
+                        except (ValueError, TypeError):
+                            days = None
                         planned.append(
                             SearchDirective(
                                 query=query,
                                 domains=[str(d).strip() for d in domains if str(d).strip()],
+                                days=days,
                             )
                         )
         except Exception:
@@ -250,7 +266,7 @@ class AnalysisAgent(BaseAgent):
         # ── Phase 2: execute searches ──────────────────────────────────────
         merged_results: list[RetrievalResult] = []
         for directive in search_directives:
-            merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains))
+            merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains, days=directive.days))
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, prior_questions)
         retrieval_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel])
@@ -323,7 +339,7 @@ class ChallengeAgent(BaseAgent):
         # ── Phase 2: execute searches ──────────────────────────────────────
         merged_results: list[RetrievalResult] = []
         for directive in search_directives:
-            merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains))
+            merged_results.extend(await self.maybe_call_search(query=directive.query, domains=directive.domains, days=directive.days))
         new_intel = state.add_intel(merged_results)
         focus_intel = self._select_intel_for_prompt(state, a_reference)
         retrieval_digest = "\n".join([f"- {r.title} ({r.url}): {r.content[:200]}" for r in focus_intel])
